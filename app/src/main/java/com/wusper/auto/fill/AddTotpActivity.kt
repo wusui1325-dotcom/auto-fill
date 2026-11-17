@@ -63,6 +63,17 @@ class AddTotpActivity : AppCompatActivity() {
         }
         binding.inputUri.addTextChangedListener(watcher)
         binding.inputSecret.addTextChangedListener(watcher)
+
+        val preset = intent.getStringExtra(EXTRA_URI)
+        if (!preset.isNullOrBlank()) {
+            binding.inputUri.setText(preset)
+            onUriChanged()
+            updatePreview()
+        }
+    }
+
+    companion object {
+        const val EXTRA_URI = "otpauth_uri"
     }
 
     override fun onResume() {

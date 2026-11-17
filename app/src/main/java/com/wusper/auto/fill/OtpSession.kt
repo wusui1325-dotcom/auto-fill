@@ -3,7 +3,6 @@ package com.wusper.auto.fill
 import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.math.max
 
 data class PendingOtp(
     val code: String,
@@ -55,7 +54,6 @@ object OtpSession {
     @Volatile
     var fillHandler: ((PendingOtp) -> Boolean)? = null
 
-    private val expireArming = Runnable { notifyChanged() }
     private val expirePending = Runnable { cancelConfirm() }
 
     fun snapshot(now: Long = System.currentTimeMillis()): SessionSnapshot {
@@ -89,11 +87,6 @@ object OtpSession {
 
     fun otpFocusLost(now: Long = System.currentTimeMillis()) {
         val changed = update { ArmingPolicy.onOtpFocusLost(it, now) }
-        if (changed) notifyChanged()
-    }
-
-    fun leftPage() {
-        val changed = update { ArmingPolicy.onLeftPage(it) }
         if (changed) notifyChanged()
     }
 
@@ -186,17 +179,7 @@ object OtpSession {
             changed = next != arming
             arming = next
         }
-        scheduleArmExpiry(next)
         return changed
-    }
-
-    private fun scheduleArmExpiry(state: ArmingPolicy.State) {
-        main.removeCallbacks(expireArming)
-        val now = System.currentTimeMillis()
-        val until = max(state.graceUntil, state.manualUntil)
-        if (state.masterEnabled && !state.otpFieldFocused && until > now) {
-            main.postDelayed(expireArming, until - now + 15L)
-        }
     }
 
     private fun pruneRecent(now: Long) {

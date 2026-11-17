@@ -38,6 +38,8 @@ class OtpAccessibilityService : AccessibilityService() {
     private var lastFocusedWasOtp = false
     private var lastAppPackage: String? = null
     private var pendingWindowPkg: String? = null
+    private var pendingFillCode: String? = null
+    private var fillAttempts = 0
     private var imePackages: Set<String> = emptySet()
     private var imePackagesAt = 0L
 
@@ -48,7 +50,7 @@ class OtpAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         OtpSession.setAccessibilityConnected(true)
-        OtpSession.fillHandler = { pending -> fillCode(pending.code) }
+        OtpSession.fillHandler = { pending -> scheduleFill(pending.code) }
         unobserve = OtpSession.observe { snap ->
             val pending = snap.pending
             if (pending == null) {
@@ -158,14 +160,14 @@ class OtpAccessibilityService : AccessibilityService() {
             return
         }
 
+        // Track the current app for fill targeting, but never auto-stop watching.
         if (eventPkg != null && lastAppPackage != null && eventPkg != lastAppPackage) {
             lastFocusedWasOtp = false
             lastAppPackage = eventPkg
-            OtpSession.leftPage()
+            OtpSession.otpFocusLost()
             return
         }
 
-        // Same app, no OTP field visible: brief grace so a dialog does not instantly stop watching.
         if (lastFocusedWasOtp || OtpSession.arming.otpFieldFocused) {
             lastFocusedWasOtp = false
             OtpSession.otpFocusLost()
@@ -197,6 +199,10 @@ class OtpAccessibilityService : AccessibilityService() {
             } catch (_: Exception) {
                 null
             } ?: return@forEach
+            if (root.packageName?.toString() == packageName) {
+                root.recycleQuietly()
+                return@forEach
+            }
             try {
                 val focus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
                 if (focus != null) {
@@ -217,6 +223,10 @@ class OtpAccessibilityService : AccessibilityService() {
         } catch (_: Exception) {
             null
         } ?: return null
+        if (root.packageName?.toString() == packageName) {
+            root.recycleQuietly()
+            return null
+        }
         try {
             val focus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             if (focus != null) {
@@ -373,9 +383,37 @@ class OtpAccessibilityService : AccessibilityService() {
             hideOverlay()
             return
         }
-        val ok = OtpSession.confirmFill()
-        if (!ok) {
+        hideOverlay()
+        val accepted = OtpSession.confirmFill()
+        if (!accepted) {
             Toast.makeText(this, R.string.fill_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun scheduleFill(code: String): Boolean {
+        if (code.isBlank()) return false
+        hideOverlay()
+        pendingFillCode = code
+        fillAttempts = 0
+        handler.removeCallbacks(fillAttempt)
+        handler.postDelayed(fillAttempt, FILL_AFTER_DISMISS_MS)
+        return true
+    }
+
+    private val fillAttempt = object : Runnable {
+        override fun run() {
+            val code = pendingFillCode ?: return
+            if (fillCode(code)) {
+                pendingFillCode = null
+                return
+            }
+            fillAttempts += 1
+            if (fillAttempts < 2) {
+                handler.postDelayed(this, FILL_RETRY_MS)
+            } else {
+                pendingFillCode = null
+                Toast.makeText(this@OtpAccessibilityService, R.string.fill_failed, Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -387,36 +425,81 @@ class OtpAccessibilityService : AccessibilityService() {
     private fun fillCode(code: String): Boolean {
         val target = resolveTarget() ?: return false
         try {
+            prepareFocus(target)
             val group = detectSplitGroup(target, code.length)
             if (group != null) {
                 try {
-                    return fillSplitFields(group, code)
+                    if (fillSplitFields(group, code)) return true
                 } finally {
                     group.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
                 }
             }
             if (fillWholeField(target, code)) return true
-            // Whole-field SET_TEXT may keep only one character; do not treat that as success.
             val retry = detectSplitGroup(target, code.length)
             if (retry != null) {
                 try {
-                    return fillSplitFields(retry, code)
+                    if (fillSplitFields(retry, code)) return true
                 } finally {
                     retry.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
                 }
             }
-            return codeFullyPresent(target, code)
+            return codePresentInNodeOrNearby(target, code)
         } finally {
             if (target !== savedTarget) target.recycleQuietly()
         }
     }
 
     private fun fillWholeField(target: AccessibilityNodeInfo, code: String): Boolean {
-        if (!target.isEditable && !target.isPassword && !target.isFocused) return false
-        target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-        setText(target, code)
-        target.refresh()
-        return codeFullyPresent(target, code)
+        if (!canAttemptFill(target)) return false
+        prepareFocus(target)
+        if (setText(target, code) && codePresentInNodeOrNearby(target, code)) return true
+        if (pasteText(target, code) && codePresentInNodeOrNearby(target, code)) return true
+        if (typePerChar(target, code) && codePresentInNodeOrNearby(target, code)) return true
+        return false
+    }
+
+    private fun canAttemptFill(node: AccessibilityNodeInfo): Boolean {
+        if (isOurPackage(node) || isAddressBar(node)) return false
+        return node.isEditable || node.isPassword || node.isFocused || isOtpNode(node) ||
+            FillTargetHeuristics.isWebViewLike(node.className?.toString())
+    }
+
+    private fun prepareFocus(node: AccessibilityNodeInfo) {
+        try {
+            node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        } catch (_: Exception) {
+            // Some web fields reject click; SET_TEXT / PASTE may still work.
+        }
+    }
+
+    private fun typePerChar(node: AccessibilityNodeInfo, code: String): Boolean {
+        if (code.isEmpty()) return false
+        prepareFocus(node)
+        setText(node, "")
+        val acc = StringBuilder()
+        for (ch in code) {
+            acc.append(ch)
+            val soFar = acc.toString()
+            if (setText(node, soFar) && prefixMatches(node, soFar)) continue
+            if (pasteText(node, ch.toString()) && prefixMatches(node, soFar)) continue
+            val readable = readableCompact(node)
+            if (readable.isNotEmpty() && !FillTargetHeuristics.codeFullyPresent(readable, soFar) &&
+                !readable.startsWith(soFar.filter { it.isLetterOrDigit() }, ignoreCase = true)
+            ) {
+                return false
+            }
+        }
+        return codePresentInNodeOrNearby(node, code)
+    }
+
+    private fun prefixMatches(node: AccessibilityNodeInfo, prefix: String): Boolean {
+        val text = readableCompact(node)
+        val want = FillTargetHeuristics.compact(prefix)
+        if (want.isEmpty()) return false
+        if (text.isEmpty()) return false
+        return text.startsWith(want, ignoreCase = true) ||
+            FillTargetHeuristics.codeFullyPresent(text, want)
     }
 
     private fun setText(node: AccessibilityNodeInfo, value: String): Boolean {
@@ -427,54 +510,141 @@ class OtpAccessibilityService : AccessibilityService() {
 
     private fun codeFullyPresent(node: AccessibilityNodeInfo, code: String): Boolean {
         node.refresh()
-        val text = node.text?.toString()?.filter { it.isLetterOrDigit() }.orEmpty()
-        val compact = code.filter { it.isLetterOrDigit() }
-        if (compact.isEmpty()) return false
-        if (compact.length > 1 && text.length <= 1) return false
-        return text.contains(compact, ignoreCase = true) && text.length >= compact.length
+        return FillTargetHeuristics.codeFullyPresent(node.text?.toString(), code)
     }
 
+    private fun readableCompact(node: AccessibilityNodeInfo): String {
+        node.refresh()
+        return FillTargetHeuristics.compact(node.text?.toString())
+    }
+
+    private fun codePresentInNodeOrNearby(node: AccessibilityNodeInfo, code: String): Boolean {
+        if (codeFullyPresent(node, code)) return true
+        val budget = intArrayOf(24)
+        if (textTreeContains(node, code, budget)) return true
+        val parent = try {
+            node.parent
+        } catch (_: Exception) {
+            null
+        }
+        if (parent != null) {
+            try {
+                val parentBudget = intArrayOf(24)
+                if (textTreeContains(parent, code, parentBudget)) return true
+            } finally {
+                parent.recycleQuietly()
+            }
+        }
+        return false
+    }
+
+    private fun textTreeContains(node: AccessibilityNodeInfo, code: String, budget: IntArray): Boolean {
+        if (budget[0] <= 0) return false
+        budget[0]--
+        val blobs = listOf(
+            node.text?.toString(),
+            node.contentDescription?.toString()
+        )
+        if (blobs.any { FillTargetHeuristics.codeFullyPresent(it, code) }) return true
+        for (i in 0 until node.childCount) {
+            if (budget[0] <= 0) return false
+            val child = node.getChild(i) ?: continue
+            try {
+                if (textTreeContains(child, code, budget)) return true
+            } finally {
+                child.recycleQuietly()
+            }
+        }
+        return false
+    }
+
+    /**
+     * After the confirm UI is dismissed, relocate the live OTP field.
+     * Do not rely only on a node saved before the prompt appeared.
+     */
     private fun resolveTarget(): AccessibilityNodeInfo? {
+        val focused = focusedEditable()
+        if (focused != null) {
+            val usable = !isOurPackage(focused) && !isAddressBar(focused) && isPlausibleTarget(focused)
+            if (usable) {
+                rememberTarget(focused)
+                focused.recycleQuietly()
+                return savedTarget
+            }
+            focused.recycleQuietly()
+        }
+        findOtpInWindows()?.let { return it }
         val saved = savedTarget
         if (saved != null) {
             try {
-                if (saved.refresh() && (saved.isEditable || saved.isPassword || isOtpNode(saved))) {
+                if (saved.refresh() && !isOurPackage(saved) && !isAddressBar(saved) &&
+                    (saved.isVisibleToUser) && canAttemptFill(saved)
+                ) {
                     return saved
                 }
             } catch (_: Exception) {
                 // Stale node.
             }
         }
-        val focused = focusedEditable()
-        if (focused != null && isOtpNode(focused)) {
-            rememberTarget(focused)
-            focused.recycleQuietly()
-            return savedTarget
-        }
-        focused?.recycleQuietly()
-        return findOtpInWindows()
+        return findOtpInWindows(preferLastApp = false)
     }
 
-    private fun findOtpInWindows(): AccessibilityNodeInfo? {
-        val wantPkg = lastAppPackage
-        var budget = TREE_BUDGET
+    private fun isPlausibleTarget(node: AccessibilityNodeInfo): Boolean {
+        return FillTargetHeuristics.isPlausibleFocusedFillTarget(
+            isEditable = node.isEditable,
+            isPassword = node.isPassword,
+            isFocused = node.isFocused,
+            isOtp = isOtpNode(node),
+            isAddressOrSearch = isAddressBar(node),
+            isWebView = FillTargetHeuristics.isWebViewLike(node.className?.toString()),
+            maxLength = extrasMaxLengthOf(node),
+            textLength = node.text?.length ?: 0
+        )
+    }
+
+    private fun extrasMaxLengthOf(node: AccessibilityNodeInfo): Int? = node.extrasMaxLength()
+
+    private fun isAddressBar(node: AccessibilityNodeInfo): Boolean {
+        return FillTargetHeuristics.looksLikeAddressOrSearchBar(
+            viewId = node.viewIdResourceName,
+            hint = node.hintText?.toString(),
+            contentDescription = node.contentDescription?.toString(),
+            className = node.className?.toString(),
+            inputType = node.inputType
+        )
+    }
+
+    private fun isOurPackage(node: AccessibilityNodeInfo): Boolean {
+        return node.packageName?.toString() == packageName
+    }
+
+    private fun findOtpInWindows(preferLastApp: Boolean = true): AccessibilityNodeInfo? {
+        val wantPkg = if (preferLastApp) lastAppPackage else null
+        var budget = FILL_TREE_BUDGET
         windows?.forEach { window ->
             if (budget <= 0) return@forEach
             if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
+            if (window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) return@forEach
             val root = try {
                 window.root
             } catch (_: Exception) {
                 null
             } ?: return@forEach
             try {
-                if (wantPkg != null && root.packageName?.toString() != wantPkg) return@forEach
+                val pkg = root.packageName?.toString()
+                if (pkg == packageName) return@forEach
+                if (wantPkg != null && pkg != wantPkg) return@forEach
                 val match = findOtpDescendant(root, budget)
                 budget = match.second
                 val node = match.first
                 if (node != null) {
-                    rememberTarget(node)
-                    node.recycleQuietly()
-                    return savedTarget
+                    if (isAddressBar(node)) {
+                        node.recycleQuietly()
+                    } else {
+                        rememberTarget(node)
+                        node.recycleQuietly()
+                        return savedTarget
+                    }
                 }
             } finally {
                 root.recycleQuietly()
@@ -638,6 +808,14 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     private fun pasteOneChar(node: AccessibilityNodeInfo, ch: String): Boolean {
+        return pasteText(node, ch)
+    }
+
+    /**
+     * Paste into the field, then immediately restore (or clear) the clipboard.
+     * The full code must never be left on the clipboard.
+     */
+    private fun pasteText(node: AccessibilityNodeInfo, value: String): Boolean {
         val cm = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager ?: return false
         val previous = try {
             cm.primaryClip
@@ -646,17 +824,17 @@ class OtpAccessibilityService : AccessibilityService() {
         }
         val hadClip = previous != null
         return try {
-            cm.setPrimaryClip(ClipData.newPlainText("", ch))
+            cm.setPrimaryClip(ClipData.newPlainText("", value))
             node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
         } finally {
             try {
                 when {
                     hadClip && previous != null -> cm.setPrimaryClip(previous)
-                    android.os.Build.VERSION.SDK_INT >= 28 -> cm.clearPrimaryClip()
+                    Build.VERSION.SDK_INT >= 28 -> cm.clearPrimaryClip()
                     else -> cm.setPrimaryClip(ClipData.newPlainText("", ""))
                 }
             } catch (_: Exception) {
-                // Best-effort restore; the pasted character was a single code cell.
+                // Best-effort restore so a pasted code does not stay on the clipboard.
             }
         }
     }
@@ -684,6 +862,9 @@ class OtpAccessibilityService : AccessibilityService() {
         private const val WINDOW_DEBOUNCE_MS = 120L
         private const val IME_CACHE_MS = 60_000L
         private const val TREE_BUDGET = 80
+        private const val FILL_TREE_BUDGET = 200
+        private const val FILL_AFTER_DISMISS_MS = 180L
+        private const val FILL_RETRY_MS = 280L
 
         // Platform stubs on some SDKs omit getAutofillHints(); call it reflectively when present.
         private val GET_AUTOFILL_HINTS = try {

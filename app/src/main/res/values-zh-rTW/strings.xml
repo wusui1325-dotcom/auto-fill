@@ -26,13 +26,17 @@
     <string name="btn_disarm">停止監看</string>
 
     <string name="first_run_title">使用前請先授權</string>
-    <string name="first_run_body">填碼只在驗證碼欄位被選取時（或你手動開始監看時）暫時讀取通知，抽出 4–8 位驗證碼後半屏詢問是否填入。你點「填入」才會寫入欄位，不會寫入剪貼簿，也不會讀取簡訊收件匣。\n\n需要兩項系統權限：\n• 通知存取：只在監看期間讀取通知中的驗證碼與來源名稱\n• 無障礙：偵測驗證碼欄位，顯示確認畫面，並在你同意後填入該欄位</string>
+    <string name="first_run_body">填碼會在你進入驗證碼欄位，或手動開始監看後讀取通知。監看不會自動關閉，只會在你按「停止監看」或關掉開關時停止。抽出 4–8 位驗證碼後半屏詢問是否填入。你點「填入」才會寫入欄位，不會把完整驗證碼留在剪貼簿，也不會讀取簡訊收件匣。
+
+需要兩項系統權限：
+• 通知存取：只在監看期間讀取通知中的驗證碼與來源名稱
+• 無障礙：偵測驗證碼欄位，顯示確認畫面，並在你同意後填入該欄位</string>
     <string name="first_run_got_it">知道了</string>
 
     <string name="rationale_listener">通知存取用於在監看期間從通知抽出驗證碼。不會讀取簡訊收件匣，也不會把完整簡訊或郵件本文顯示在確認畫面。</string>
     <string name="rationale_accessibility">無障礙僅用於偵測驗證碼欄位、顯示確認畫面，以及在你按下「填入」後把驗證碼寫入該欄位。</string>
 
-    <string name="explanation">進入網頁或 App 的驗證碼欄位時會自動開始監看通知；鍵盤彈出或短暫失焦後會再等約 80 秒。離開驗證碼頁、逾時或關閉開關就會停止。你也可以手動開始監看。驗證碼來了只會半屏詢問，不會偷偷填入。</string>
+    <string name="explanation">進入網頁或 App 的驗證碼欄位，或在主畫面按「開始監看」，就會開始監看通知。監看不會因為離開頁面、切換 App 或等候而自動關閉，只會在你按「停止監看」或關掉上方開關時停止。驗證碼來了只會半屏詢問，不會偷偷填入。</string>
     <string name="privacy_note">本應用不連網、不收集分析資料。一鍵關閉上方開關即可停止監看。</string>
 
     <string name="confirm_title">要填入這組驗證碼嗎？</string>
@@ -47,7 +51,7 @@
     <string name="btn_totp_hint">內建 6 位一次性密碼，密鑰只加密存放在本應用，可匯入與匯出。</string>
 
     <string name="totp_title">驗證器</string>
-    <string name="totp_intro">帳戶與密鑰只加密存放在這部裝置上，不會上傳，也不會與其他應用聯動。長按驗證碼可複製目前顯示的一組數字，密鑰不會被複製。</string>
+    <string name="totp_intro">帳戶與密鑰只加密存放在這部裝置上，不會上傳，也不會與其他應用聯動。可掃描或匯入 otpauth 連結、本應用備份檔，以及 Google Authenticator 匯出的二維碼（圖片或掃描）。長按驗證碼可複製目前顯示的一組數字，密鑰不會被複製。相機權限只在掃描時才會申請。</string>
     <string name="totp_empty">還沒有驗證器帳戶。點「新增」貼上 otpauth 連結或輸入密鑰。</string>
     <string name="totp_add">新增</string>
     <string name="totp_add_title">新增帳戶</string>
@@ -87,5 +91,15 @@
     <string name="totp_name_required">請輸入發行方或帳戶名稱</string>
     <string name="totp_preview_invalid">輸入有效密鑰後，這裡會顯示目前驗證碼</string>
     <string name="totp_preview_ok">目前驗證碼：%1$s（剩餘 %2$d 秒）</string>
+
+    <string name="totp_scan">掃描</string>
+    <string name="totp_scan_hint">將 otpauth 或 Google Authenticator 匯出的二維碼對準框內。相機只用在這個頁面。</string>
+    <string name="totp_scan_failed">無法開啟相機</string>
+    <string name="totp_scan_not_otpauth">這個二維碼不是 otpauth 或 Google Authenticator 匯出碼</string>
+    <string name="totp_camera_denied">未授予相機權限，無法掃描</string>
+    <string name="totp_camera_title">允許使用相機？</string>
+    <string name="totp_camera_rationale">掃描驗證器二維碼時才會使用相機，掃描結束即關閉。可用來讀取 otpauth 連結或 Google Authenticator 的匯出碼。</string>
+    <string name="totp_import_batch">已匯入 %1$d 個新帳戶（本張共 %2$d 個，這是第 %3$d／%4$d 張匯出碼）。若還有其餘匯出碼，請繼續掃描或匯入圖片。</string>
 </resources>
+
 

@@ -26,13 +26,17 @@
     <string name="btn_disarm">Stop watching</string>
 
     <string name="first_run_title">Grant access first</string>
-    <string name="first_run_body">OTP Fill only reads notifications while an OTP field is focused (or after you start watching manually). When a 4–8 digit code arrives, a half-screen prompt asks whether to fill it. The code is written into the field only after you tap Fill. It is never copied to the clipboard, and the SMS inbox is never read.\n\nTwo system permissions are required:\n• Notification access: while watching, read the code and a short source name from notifications\n• Accessibility: detect the OTP field, show the confirm prompt, and fill the field after you agree</string>
+    <string name="first_run_body">OTP Fill reads notifications after you focus an OTP field or start watching manually. Watching does not stop on its own; it stops only when you tap Stop watching or turn the switch off. When a 4–8 digit code arrives, a half-screen prompt asks whether to fill it. The code is written into the field only after you tap Fill. The full code is not left on the clipboard, and the SMS inbox is never read.
+
+Two system permissions are required:
+• Notification access: while watching, read the code and a short source name from notifications
+• Accessibility: detect the OTP field, show the confirm prompt, and fill the field after you agree</string>
     <string name="first_run_got_it">Got it</string>
 
     <string name="rationale_listener">Notification access is used only while watching, to extract a verification code. The SMS inbox is not read, and the confirm prompt never shows the full SMS or email body.</string>
     <string name="rationale_accessibility">Accessibility is used only to detect OTP fields, show the confirm prompt, and fill the focused field after you tap Fill.</string>
 
-    <string name="explanation">Focusing an OTP field in a webpage or app starts watching notifications. After the keyboard appears or focus is briefly lost, watching continues for about 80 seconds. Leaving the OTP page, waiting out the timeout, or turning the switch off stops it. You can also start watching manually. Incoming codes always ask for confirmation; nothing is filled silently.</string>
+    <string name="explanation">Focusing an OTP field in a webpage or app, or tapping Start watching, begins watching notifications. Watching does not stop automatically if you leave the page, switch apps, or wait; it stops only when you tap Stop watching or turn the switch off. Incoming codes always ask for confirmation; nothing is filled silently.</string>
     <string name="privacy_note">This app does not use the network and does not collect analytics. Turn the switch off to stop watching immediately.</string>
 
     <string name="confirm_title">Fill in this verification code?</string>
@@ -47,7 +51,7 @@
     <string name="btn_totp_hint">Built-in 6-digit one-time codes. Secrets stay encrypted in this app and can be imported or exported.</string>
 
     <string name="totp_title">Authenticator</string>
-    <string name="totp_intro">Accounts and secrets are encrypted on this device only. They are not uploaded and are not linked to another app. Long-press a code to copy the digits currently on screen; the secret is never copied.</string>
+    <string name="totp_intro">Accounts and secrets are encrypted on this device only. They are not uploaded and are not linked to another app. You can scan or import otpauth URIs, this app’s backup files, and Google Authenticator export QR codes (a photo or a live scan). Long-press a code to copy the digits currently on screen; the secret is never copied. Camera permission is requested only when you scan.</string>
     <string name="totp_empty">No authenticator accounts yet. Tap Add to paste an otpauth URI or enter a secret.</string>
     <string name="totp_add">Add</string>
     <string name="totp_add_title">Add account</string>
@@ -87,5 +91,15 @@
     <string name="totp_name_required">Enter an issuer or account name</string>
     <string name="totp_preview_invalid">A live code will appear here once the secret is valid</string>
     <string name="totp_preview_ok">Current code: %1$s (%2$d seconds left)</string>
+
+    <string name="totp_scan">Scan</string>
+    <string name="totp_scan_hint">Point the camera at an otpauth QR code or a Google Authenticator export code. The camera is used only on this screen.</string>
+    <string name="totp_scan_failed">Could not open the camera</string>
+    <string name="totp_scan_not_otpauth">This QR code is not an otpauth or Google Authenticator export code</string>
+    <string name="totp_camera_denied">Camera permission was not granted, so scanning is unavailable</string>
+    <string name="totp_camera_title">Allow camera access?</string>
+    <string name="totp_camera_rationale">The camera is used only to scan authenticator QR codes, then closed. It can read otpauth URIs or Google Authenticator export codes.</string>
+    <string name="totp_import_batch">Imported %1$d new account(s) (%2$d on this code, which is %3$d of %4$d). If more export codes remain, scan or import them next.</string>
 </resources>
+
 

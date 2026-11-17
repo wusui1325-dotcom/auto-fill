@@ -51,11 +51,13 @@ class ConfirmActivity : AppCompatActivity() {
     private fun accept() {
         if (handled) return
         handled = true
-        val ok = OtpSession.confirmFill()
-        if (!ok) {
+        // Dismiss this dialog first so the underlying webpage can regain focus;
+        // the accessibility service fills after a short delay.
+        val accepted = OtpSession.confirmFill()
+        finish()
+        if (!accepted) {
             Toast.makeText(this, R.string.fill_failed, Toast.LENGTH_SHORT).show()
         }
-        finish()
     }
 
     private fun cancel() {

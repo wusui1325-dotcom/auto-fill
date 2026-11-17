@@ -1,6 +1,8 @@
 package com.wusper.auto.fill
 
+import android.Manifest
 import android.content.ClipData
+import android.content.pm.PackageManager
 import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
@@ -14,6 +16,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -24,10 +27,9 @@ import com.wusper.auto.fill.databinding.ActivityTotpBinding
 import com.wusper.auto.fill.databinding.ItemTotpAccountBinding
 import com.wusper.auto.fill.totp.TotpAccount
 import com.wusper.auto.fill.totp.TotpBackup
+import com.wusper.auto.fill.totp.TotpImport
 import com.wusper.auto.fill.totp.TotpGenerator
 import com.wusper.auto.fill.totp.TotpVault
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,6 +65,20 @@ class TotpActivity : AppCompatActivity() {
         if (uri != null) startImport(uri)
     }
 
+    private val scanQr = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.getStringExtra(ScanTotpQrActivity.EXTRA_OTP_AUTH_URI)
+        if (!uri.isNullOrBlank()) handleScannedPayload(uri)
+    }
+
+    private val requestCamera = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startScan()
+        else Toast.makeText(this, R.string.totp_camera_denied, Toast.LENGTH_LONG).show()
+    }
+
     private val tick = object : Runnable {
         override fun run() {
             if (isDestroyed || isFinishing) return
@@ -89,8 +105,20 @@ class TotpActivity : AppCompatActivity() {
         binding.btnAdd.setOnClickListener {
             startActivity(Intent(this, AddTotpActivity::class.java))
         }
+        binding.btnScan.setOnClickListener { onScanClicked() }
         binding.btnImport.setOnClickListener {
-            openDocument.launch(arrayOf("application/json", "text/plain", "*/*"))
+            openDocument.launch(
+                arrayOf(
+                    "application/json",
+                    "text/plain",
+                    "text/*",
+                    "image/*",
+                    "image/png",
+                    "image/jpeg",
+                    "image/webp",
+                    "*/*"
+                )
+            )
         }
         binding.btnExport.setOnClickListener { askExportPassword() }
     }
@@ -282,18 +310,22 @@ class TotpActivity : AppCompatActivity() {
     }
 
     private fun startImport(uri: Uri) {
-        val text = try {
-            contentResolver.openInputStream(uri)?.use { input ->
-                BufferedReader(InputStreamReader(input, Charsets.UTF_8)).readText()
-            }
+        val bytes = try {
+            contentResolver.openInputStream(uri)?.use { input -> input.readBytes() }
         } catch (_: Exception) {
             null
         }
-        if (text.isNullOrBlank()) {
+        if (bytes == null || bytes.isEmpty() || bytes.size > 8_000_000) {
             Toast.makeText(this, R.string.totp_import_failed, Toast.LENGTH_LONG).show()
             return
         }
-        if (text.length > 1_000_000) {
+        val fromQr = QrBitmapDecoder.decode(bytes)
+        val text = fromQr ?: bytes.toString(Charsets.UTF_8)
+        if (text.isBlank()) {
+            Toast.makeText(this, R.string.totp_import_failed, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (fromQr == null && text.length > 1_000_000) {
             Toast.makeText(this, R.string.totp_import_failed, Toast.LENGTH_LONG).show()
             return
         }
@@ -317,22 +349,72 @@ class TotpActivity : AppCompatActivity() {
         }
     }
 
+    private fun handleScannedPayload(payload: String) {
+        val uri = FillTargetHeuristics.extractImportUri(payload)
+        if (uri == null) {
+            Toast.makeText(this, R.string.totp_scan_not_otpauth, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (uri.startsWith("otpauth://totp", ignoreCase = true)) {
+            startActivity(
+                Intent(this, AddTotpActivity::class.java)
+                    .putExtra(AddTotpActivity.EXTRA_URI, uri)
+            )
+            return
+        }
+        finishImport(payload, null)
+    }
+
     private fun finishImport(text: String?, password: CharArray?) {
         try {
             if (text.isNullOrBlank()) throw IllegalArgumentException("empty")
-            val parsed = TotpBackup.parse(text, password)
-            if (parsed.isEmpty()) {
+            val parsed = TotpImport.parse(text, password)
+            if (parsed.accounts.isEmpty()) {
                 Toast.makeText(this, R.string.totp_import_empty, Toast.LENGTH_LONG).show()
                 return
             }
-            val added = vault.addAll(parsed)
+            val added = vault.addAll(parsed.accounts)
             reload()
-            Toast.makeText(this, getString(R.string.totp_import_ok, added, parsed.size), Toast.LENGTH_LONG).show()
+            val batch = parsed.batch
+            val msg = if (batch != null && batch.isPartialBatch) {
+                getString(
+                    R.string.totp_import_batch,
+                    added,
+                    parsed.accounts.size,
+                    batch.batchIndex + 1,
+                    batch.batchSize
+                )
+            } else {
+                getString(R.string.totp_import_ok, added, parsed.accounts.size)
+            }
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
         } catch (_: Exception) {
             Toast.makeText(this, R.string.totp_import_failed, Toast.LENGTH_LONG).show()
         } finally {
             password?.fill(0.toChar())
         }
+    }
+
+    private fun onScanClicked() {
+        when {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED -> startScan()
+            shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) -> {
+                MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.totp_camera_title)
+                    .setMessage(R.string.totp_camera_rationale)
+                    .setNegativeButton(R.string.confirm_cancel, null)
+                    .setPositiveButton(R.string.totp_scan) { _, _ ->
+                        requestCamera.launch(Manifest.permission.CAMERA)
+                    }
+                    .show()
+            }
+            else -> requestCamera.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun startScan() {
+        scanQr.launch(Intent(this, ScanTotpQrActivity::class.java))
     }
 
     private fun passwordField(): PasswordField {

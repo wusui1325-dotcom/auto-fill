@@ -26,13 +26,17 @@
     <string name="btn_disarm">停止监看</string>
 
     <string name="first_run_title">使用前请先授权</string>
-    <string name="first_run_body">填码只在验证码栏位被选中时（或你手动开始监看时）暂时读取通知，抽出 4–8 位验证码后半屏询问是否填入。你点「填入」才会写入栏位，不会写入剪贴板，也不会读取短信收件箱。\n\n需要两项系统权限：\n• 通知访问：只在监看期间读取通知中的验证码与来源名称\n• 无障碍：检测验证码栏位，显示确认画面，并在你同意后填入该栏位</string>
+    <string name="first_run_body">填码会在你进入验证码栏位，或手动开始监看后读取通知。监看不会自动关闭，只会在你按「停止监看」或关掉开关时停止。抽出 4–8 位验证码后半屏询问是否填入。你点「填入」才会写入栏位，不会把完整验证码留在剪贴板，也不会读取短信收件箱。
+
+需要两项系统权限：
+• 通知访问：只在监看期间读取通知中的验证码与来源名称
+• 无障碍：检测验证码栏位，显示确认画面，并在你同意后填入该栏位</string>
     <string name="first_run_got_it">知道了</string>
 
     <string name="rationale_listener">通知访问用于在监看期间从通知抽出验证码。不会读取短信收件箱，也不会把完整短信或邮件正文显示在确认画面。</string>
     <string name="rationale_accessibility">无障碍仅用于检测验证码栏位、显示确认画面，以及在你按下「填入」后把验证码写入该栏位。</string>
 
-    <string name="explanation">进入网页或 App 的验证码栏位时会自动开始监看通知；键盘弹出或短暂失焦后会再等约 80 秒。离开验证码页、超时或关闭开关就会停止。你也可以手动开始监看。验证码来了只会半屏询问，不会偷偷填入。</string>
+    <string name="explanation">进入网页或 App 的验证码栏位，或在主画面按「开始监看」，就会开始监看通知。监看不会因为离开页面、切换 App 或等待而自动关闭，只会在你按「停止监看」或关掉上方开关时停止。验证码来了只会半屏询问，不会偷偷填入。</string>
     <string name="privacy_note">本应用不联网、不收集分析数据。一键关闭上方开关即可停止监看。</string>
 
     <string name="confirm_title">要填入这组验证码吗？</string>
@@ -47,7 +51,7 @@
     <string name="btn_totp_hint">内置 6 位一次性密码，密钥只加密存放在本应用，可导入与导出。</string>
 
     <string name="totp_title">验证器</string>
-    <string name="totp_intro">账户与密钥只加密存放在这台设备上，不会上传，也不会与其他应用联动。长按验证码可复制当前显示的一组数字，密钥不会被复制。</string>
+    <string name="totp_intro">账户与密钥只加密存放在这台设备上，不会上传，也不会与其他应用联动。可扫描或导入 otpauth 链接、本应用备份文件，以及 Google Authenticator 导出的二维码（图片或扫描）。长按验证码可复制当前显示的一组数字，密钥不会被复制。相机权限只在扫描时才会申请。</string>
     <string name="totp_empty">还没有验证器账户。点「新增」粘贴 otpauth 链接或输入密钥。</string>
     <string name="totp_add">新增</string>
     <string name="totp_add_title">新增账户</string>
@@ -87,5 +91,15 @@
     <string name="totp_name_required">请输入发行方或账户名称</string>
     <string name="totp_preview_invalid">输入有效密钥后，这里会显示当前验证码</string>
     <string name="totp_preview_ok">当前验证码：%1$s（剩余 %2$d 秒）</string>
+
+    <string name="totp_scan">扫描</string>
+    <string name="totp_scan_hint">将 otpauth 或 Google Authenticator 导出的二维码对准框内。相机只用在这个页面。</string>
+    <string name="totp_scan_failed">无法打开相机</string>
+    <string name="totp_scan_not_otpauth">这个二维码不是 otpauth 或 Google Authenticator 导出码</string>
+    <string name="totp_camera_denied">未授予相机权限，无法扫描</string>
+    <string name="totp_camera_title">允许使用相机？</string>
+    <string name="totp_camera_rationale">扫描验证器二维码时才会使用相机，扫描结束即关闭。可用来读取 otpauth 链接或 Google Authenticator 的导出码。</string>
+    <string name="totp_import_batch">已导入 %1$d 个新账户（本张共 %2$d 个，这是第 %3$d／%4$d 张导出码）。若还有其余导出码，请继续扫描或导入图片。</string>
 </resources>
+
 

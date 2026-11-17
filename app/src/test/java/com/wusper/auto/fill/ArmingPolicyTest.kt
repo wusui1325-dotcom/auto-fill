@@ -11,31 +11,33 @@ class ArmingPolicyTest {
         val state = ArmingPolicy.State()
         assertFalse(state.isArmed(0L))
         assertTrue(state.masterEnabled)
+        assertFalse(state.watching)
     }
 
     @Test
-    fun armsOnOtpFocusAndStaysForGraceAfterUnfocus() {
+    fun armsOnOtpFocusAndStaysAfterUnfocusAndTimePassing() {
         val now = 1_000_000L
         var state = ArmingPolicy.onOtpFocusGained(ArmingPolicy.State())
+        assertTrue(state.watching)
         assertTrue(state.isArmed(now))
         state = ArmingPolicy.onOtpFocusLost(state, now)
         assertTrue(state.isArmed(now + 1_000))
-        assertTrue(state.isArmed(now + ArmingPolicy.GRACE_MS - 1))
-        assertFalse(state.isArmed(now + ArmingPolicy.GRACE_MS))
+        assertTrue(state.isArmed(now + 24 * 60 * 60_000L))
+        assertFalse(state.otpFieldFocused)
     }
 
     @Test
-    fun leavingPageStopsGraceButKeepsManualWatch() {
+    fun leavingPageOrSwitchingAppsDoesNotStopWatching() {
         val now = 5_000L
-        var state = ArmingPolicy.onOtpFocusLost(ArmingPolicy.State(), now)
-        assertTrue(state.isArmed(now + 10))
+        var state = ArmingPolicy.onOtpFocusGained(ArmingPolicy.State())
         state = ArmingPolicy.onLeftPage(state)
-        assertFalse(state.isArmed(now + 10))
+        assertTrue(state.isArmed(now + 10))
+        assertTrue(state.watching)
 
         state = ArmingPolicy.onManualArm(ArmingPolicy.State(), now)
         state = ArmingPolicy.onLeftPage(state)
         assertTrue(state.isArmed(now + 10))
-        assertFalse(state.isArmed(now + ArmingPolicy.MANUAL_MS))
+        assertTrue(state.isArmed(now + 90_000L))
     }
 
     @Test
@@ -44,6 +46,7 @@ class ArmingPolicyTest {
         var state = ArmingPolicy.onOtpFocusGained(ArmingPolicy.State())
         state = ArmingPolicy.onMaster(false, state)
         assertFalse(state.isArmed(now))
+        assertFalse(state.watching)
         state = ArmingPolicy.onOtpFocusGained(state)
         assertFalse(state.isArmed(now))
     }
@@ -55,6 +58,7 @@ class ArmingPolicyTest {
         assertTrue(state.isArmed(now))
         state = ArmingPolicy.onStopWatching(state)
         assertFalse(state.isArmed(now))
+        assertFalse(state.watching)
     }
 
     @Test

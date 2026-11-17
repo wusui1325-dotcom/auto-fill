@@ -2,27 +2,20 @@ package com.wusper.auto.fill
 
 /**
  * When the watcher should listen to notifications.
- * Auto-arm on OTP focus, stay armed briefly after unfocus, stop when leaving the page.
+ * Watching starts on OTP focus or a manual start, then stays on until the user
+ * turns the master switch off or explicitly stops watching.
  */
 object ArmingPolicy {
-    const val GRACE_MS = 80_000L
-    const val MANUAL_MS = 90_000L
 
     data class State(
         val masterEnabled: Boolean = true,
-        val otpFieldFocused: Boolean = false,
-        val graceUntil: Long = 0L,
-        val manualUntil: Long = 0L
+        val watching: Boolean = false,
+        val otpFieldFocused: Boolean = false
     ) {
-        fun isArmed(now: Long): Boolean {
+        fun isArmed(now: Long = 0L): Boolean {
             if (!masterEnabled) return false
-            if (otpFieldFocused) return true
-            if (now < graceUntil) return true
-            if (now < manualUntil) return true
-            return false
+            return watching
         }
-
-        fun isManual(now: Long): Boolean = masterEnabled && now < manualUntil
     }
 
     fun onMaster(enabled: Boolean, state: State): State {
@@ -35,27 +28,27 @@ object ArmingPolicy {
 
     fun onOtpFocusGained(state: State): State {
         if (!state.masterEnabled) return state
-        return state.copy(otpFieldFocused = true)
+        return state.copy(watching = true, otpFieldFocused = true)
     }
 
-    fun onOtpFocusLost(state: State, now: Long): State {
+    fun onOtpFocusLost(state: State, now: Long = 0L): State {
         if (!state.masterEnabled) return state
-        return state.copy(otpFieldFocused = false, graceUntil = now + GRACE_MS)
+        return state.copy(otpFieldFocused = false)
     }
 
     fun onLeftPage(state: State): State {
         if (!state.masterEnabled) return state
-        // Manual watch continues until its own timeout; auto grace stops with the page.
-        return state.copy(otpFieldFocused = false, graceUntil = 0L)
+        // Leaving a page or switching apps must not stop watching.
+        return state.copy(otpFieldFocused = false)
     }
 
-    fun onManualArm(state: State, now: Long): State {
+    fun onManualArm(state: State, now: Long = 0L): State {
         if (!state.masterEnabled) return state
-        return state.copy(manualUntil = now + MANUAL_MS)
+        return state.copy(watching = true)
     }
 
     fun onStopWatching(state: State): State {
-        return state.copy(otpFieldFocused = false, graceUntil = 0L, manualUntil = 0L)
+        return state.copy(watching = false, otpFieldFocused = false)
     }
 
     fun isTransientPackage(packageName: String?, selfPackage: String): Boolean {
