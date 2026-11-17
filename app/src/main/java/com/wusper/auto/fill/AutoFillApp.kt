@@ -12,6 +12,7 @@ class AutoFillApp : Application() {
         DynamicColors.applyToActivitiesIfAvailable(this)
         prefs = Prefs(this)
         OtpSession.setMasterEnabled(prefs.masterEnabled)
+        ListenerRebind.scheduleIfNeeded(this)
     }
 }
 

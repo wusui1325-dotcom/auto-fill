@@ -100,6 +100,11 @@ Two system permissions are required:
     <string name="totp_camera_title">Allow camera access?</string>
     <string name="totp_camera_rationale">The camera is used only to scan authenticator QR codes, then closed. It can read otpauth URIs or Google Authenticator export codes.</string>
     <string name="totp_import_batch">Imported %1$d new account(s) (%2$d on this code, which is %3$d of %4$d). If more export codes remain, scan or import them next.</string>
+
+    <string name="btn_reconnect_listener">Reconnect notification access</string>
+    <string name="btn_reconnect_accessibility">Reconnect accessibility</string>
+    <string name="status_services_disconnected">Watching: services not connected, please reconnect</string>
 </resources>
+
 
 

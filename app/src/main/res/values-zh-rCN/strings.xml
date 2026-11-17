@@ -100,6 +100,11 @@
     <string name="totp_camera_title">允许使用相机？</string>
     <string name="totp_camera_rationale">扫描验证器二维码时才会使用相机，扫描结束即关闭。可用来读取 otpauth 链接或 Google Authenticator 的导出码。</string>
     <string name="totp_import_batch">已导入 %1$d 个新账户（本张共 %2$d 个，这是第 %3$d／%4$d 张导出码）。若还有其余导出码，请继续扫描或导入图片。</string>
+
+    <string name="btn_reconnect_listener">重新连线通知访问</string>
+    <string name="btn_reconnect_accessibility">重新连线无障碍</string>
+    <string name="status_services_disconnected">监看：服务尚未连线，请重新连线</string>
 </resources>
+
 
 

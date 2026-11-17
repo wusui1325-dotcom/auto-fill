@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        ListenerRebind.scheduleIfNeeded(this)
         render(OtpSession.snapshot())
     }
 
@@ -75,7 +76,16 @@ class MainActivity : AppCompatActivity() {
         if (!::binding.isInitialized || isDestroyed) return
         val listenerOn = Permissions.isNotificationListenerEnabled(this)
         val a11yOn = Permissions.isAccessibilityEnabled(this)
-        val ready = listenerOn && a11yOn
+        val listenerButton = ConnectionUi.permissionButton(listenerOn, snap.listenerConnected)
+        val a11yButton = ConnectionUi.permissionButton(a11yOn, snap.accessibilityConnected)
+        val watch = ConnectionUi.watchStatus(
+            masterEnabled = snap.masterEnabled,
+            armed = snap.armed,
+            listenerSettingsOn = listenerOn,
+            listenerConnected = snap.listenerConnected,
+            accessibilitySettingsOn = a11yOn,
+            accessibilityConnected = snap.accessibilityConnected
+        )
 
         binding.statusListener.text = getString(
             when {
@@ -91,28 +101,43 @@ class MainActivity : AppCompatActivity() {
                 else -> R.string.status_accessibility_off
             }
         )
-        binding.statusWatch.text = when {
-            !snap.masterEnabled -> getString(R.string.status_disabled)
-            !ready -> getString(R.string.status_need_permissions)
-            snap.armed -> getString(R.string.status_armed)
-            else -> getString(R.string.status_standby)
-        }
+        binding.statusWatch.text = getString(
+            when (watch) {
+                WatchStatusKind.DISABLED -> R.string.status_disabled
+                WatchStatusKind.NEED_PERMISSIONS -> R.string.status_need_permissions
+                WatchStatusKind.SERVICES_DISCONNECTED -> R.string.status_services_disconnected
+                WatchStatusKind.ARMED -> R.string.status_armed
+                WatchStatusKind.STANDBY -> R.string.status_standby
+            }
+        )
 
         updatingSwitch = true
         binding.switchMaster.isChecked = snap.masterEnabled
         updatingSwitch = false
 
-        binding.btnListener.isEnabled = !listenerOn
+        binding.btnListener.isEnabled = ConnectionUi.buttonEnabled(listenerButton)
         binding.btnListener.text = getString(
-            if (listenerOn) R.string.btn_listener_granted else R.string.btn_grant_listener
+            when (listenerButton) {
+                PermissionButtonKind.CONNECTED -> R.string.btn_listener_granted
+                PermissionButtonKind.RECONNECT -> R.string.btn_reconnect_listener
+                PermissionButtonKind.GRANT -> R.string.btn_grant_listener
+            }
         )
-        binding.btnAccessibility.isEnabled = !a11yOn
+        binding.btnAccessibility.isEnabled = ConnectionUi.buttonEnabled(a11yButton)
         binding.btnAccessibility.text = getString(
-            if (a11yOn) R.string.btn_accessibility_granted else R.string.btn_grant_accessibility
+            when (a11yButton) {
+                PermissionButtonKind.CONNECTED -> R.string.btn_accessibility_granted
+                PermissionButtonKind.RECONNECT -> R.string.btn_reconnect_accessibility
+                PermissionButtonKind.GRANT -> R.string.btn_grant_accessibility
+            }
         )
 
-        val canWatch = snap.masterEnabled && ready
-        binding.btnArm.isEnabled = canWatch
+        binding.btnArm.isEnabled = ConnectionUi.canToggleWatch(
+            masterEnabled = snap.masterEnabled,
+            armed = snap.armed,
+            listenerSettingsOn = listenerOn,
+            accessibilitySettingsOn = a11yOn
+        )
         binding.btnArm.text = getString(
             if (snap.armed) R.string.btn_disarm else R.string.btn_arm_now
         )

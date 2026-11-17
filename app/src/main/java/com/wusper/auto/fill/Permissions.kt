@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.service.notification.NotificationListenerService
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
 
@@ -36,6 +37,15 @@ object Permissions {
         val wantFlat = expected.flattenToString()
         val wantShort = expected.flattenToShortString()
         return raw.split(':').any { it.equals(wantFlat, ignoreCase = true) || it.equals(wantShort, ignoreCase = true) }
+    }
+
+    fun requestNotificationListenerRebind(context: Context) {
+        try {
+            val cn = ComponentName(context, OtpNotificationListener::class.java)
+            NotificationListenerService.requestRebind(cn)
+        } catch (_: Exception) {
+            // Best-effort; the reconnect button still opens settings.
+        }
     }
 
     fun openNotificationListenerSettings(context: Context) {
