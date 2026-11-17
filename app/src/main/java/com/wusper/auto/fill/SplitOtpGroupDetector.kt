@@ -31,10 +31,10 @@ object SplitOtpGroupDetector {
         if (expected !in 4..8) return null
         val start = startId?.let { id -> cells.firstOrNull { it.id == id } }
 
-        val candidates = cells.filter { looksLikeCell(it, start) }
+        val candidates = cells.filter { looksLikeCell(it, start, expected) }
         if (candidates.size < expected) return null
 
-        val scoped = if (start != null && looksLikeCell(start, start)) {
+        val scoped = if (start != null && looksLikeCell(start, start, expected)) {
             val nearby = candidates.filter { nearStart(it, start, expected) }
             if (nearby.size >= expected) nearby else candidates.filter { similarSize(it, start) }
         } else {
@@ -47,14 +47,23 @@ object SplitOtpGroupDetector {
         return readingOrder(cluster).map { it.id }
     }
 
-    internal fun looksLikeCell(cell: CellSnapshot, reference: CellSnapshot? = null): Boolean {
+    /**
+     * A compact box is a cell. maxlength 1 is the usual case; the first box is
+     * sometimes given maxlength equal to the full code so a paste can spread.
+     * Wide maxlength fields (phone, amount) stay out.
+     */
+    internal fun looksLikeCell(
+        cell: CellSnapshot,
+        reference: CellSnapshot? = null,
+        expected: Int = 8
+    ): Boolean {
         if (!cell.isEditable && !cell.isPassword) return false
         val max = cell.maxLength
-        if (max != null && max >= 4) return false
+        if (max != null && max > expected) return false
         if (cell.textLength >= 2) return false
         if (max != null && max <= 1) return true
-        if (cell.textLength <= 1 && isCellSized(cell, reference)) return true
-        return false
+        if (max != null && max in 2..expected && !isCellSized(cell, reference)) return false
+        return cell.textLength <= 1 && isCellSized(cell, reference)
     }
 
     private fun isCellSized(cell: CellSnapshot, reference: CellSnapshot?): Boolean {

@@ -3,11 +3,14 @@ package com.wusper.auto.fill
 import android.graphics.PixelFormat
 import android.os.Build
 import android.view.Gravity
+import android.view.WindowInsets
 import android.view.WindowManager
 
 /**
  * Layout params for the half-screen confirm overlay.
  * Does not use FLAG_NOT_FOCUSABLE, so 填入 / 取消 stay tappable.
+ * Fits the IME so the sheet sits above an open keyboard instead of
+ * being hidden behind it (common in native apps that keep a field focused).
  */
 object OverlayLayout {
 
@@ -28,15 +31,15 @@ object OverlayLayout {
             PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.BOTTOM
-        params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+        params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             params.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            params.fitInsetsTypes = 0
-            params.fitInsetsSides = 0
-            params.setFitInsetsIgnoringVisibility(true)
+            params.fitInsetsTypes = WindowInsets.Type.ime() or WindowInsets.Type.navigationBars()
+            params.fitInsetsSides = WindowInsets.Side.BOTTOM
+            params.setFitInsetsIgnoringVisibility(false)
         }
         return params
     }

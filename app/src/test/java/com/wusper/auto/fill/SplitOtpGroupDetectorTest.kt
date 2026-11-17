@@ -102,4 +102,26 @@ class SplitOtpGroupDetectorTest {
         val ordered = SplitOtpGroupDetector.readingOrder(cells).map { it.id }
         assertEquals(listOf(0, 1, 2, 3), ordered)
     }
+
+    @Test
+    fun detectsEightCellsWhenFirstAllowsFullPaste() {
+        val cells = (0 until 8).map { i ->
+            cell(
+                i,
+                left = 20 + i * 56,
+                top = 200,
+                maxLength = if (i == 0) 8 else 1
+            )
+        }
+        val ids = SplitOtpGroupDetector.detect(cells, 8, startId = 0)
+        assertEquals((0 until 8).toList(), ids)
+    }
+
+    @Test
+    fun stillRejectsWideMaxLengthEightBarAmongCells() {
+        val cells = (0 until 7).map { i -> cell(i, left = 20 + i * 56, top = 200) } +
+            listOf(cell(7, left = 20, top = 300, width = 360, height = 56, maxLength = 8))
+        assertNull(SplitOtpGroupDetector.detect(cells, 8, startId = 0))
+    }
+
 }

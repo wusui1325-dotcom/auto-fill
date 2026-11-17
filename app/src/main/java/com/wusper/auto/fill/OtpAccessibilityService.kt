@@ -379,7 +379,7 @@ class OtpAccessibilityService : AccessibilityService() {
             val group = detectSplitGroup(target, code.length)
             if (group != null) {
                 try {
-                    if (fillSplitFields(group, code)) return true
+                    if (fillSplitGroup(group, code)) return true
                 } finally {
                     group.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
                 }
@@ -388,7 +388,7 @@ class OtpAccessibilityService : AccessibilityService() {
             val retry = detectSplitGroup(target, code.length)
             if (retry != null) {
                 try {
-                    if (fillSplitFields(retry, code)) return true
+                    if (fillSplitGroup(retry, code)) return true
                 } finally {
                     retry.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
                 }
@@ -838,6 +838,40 @@ class OtpAccessibilityService : AccessibilityService() {
             viewId = viewIdResourceName,
             autofillHints = readAutofillHints()
         )
+    }
+
+
+    /**
+     * Prefer pasting the full code into a first cell that can hold it, so the
+     * page can spread the characters. If that leaves the whole code in cell 0,
+     * clear and write one character per cell.
+     */
+    private fun fillSplitGroup(fields: List<AccessibilityNodeInfo>, code: String): Boolean {
+        if (fields.size != code.length) return false
+        val first = fields.first()
+        if (SplitFillPolicy.firstCellAcceptsFullCode(extrasMaxLengthOf(first), code.length)) {
+            first.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            val setOk = setText(first, code)
+            var state = SplitFillPolicy.groupState(fields.map { readableCompact(it) }, code)
+            if (state == SplitGroupState.DISTRIBUTED) return true
+            if (state == SplitGroupState.UNREADABLE || state == SplitGroupState.OTHER) {
+                clearFieldForPaste(first)
+                val pasteOk = pasteText(first, code)
+                state = SplitFillPolicy.groupState(fields.map { readableCompact(it) }, code)
+                if (state == SplitGroupState.DISTRIBUTED) return true
+                if (state == SplitGroupState.UNREADABLE && pasteOk && !setOk) {
+                    // Text stays unreadable; the paste may still have spread.
+                    // Fall through to per-cell write after a clear so we do not
+                    // leave the full code only in the first box.
+                }
+            }
+            if (SplitFillPolicy.shouldClearFirstBeforePerCell(state) ||
+                state == SplitGroupState.FIRST_HAS_ALL
+            ) {
+                clearFieldForPaste(first)
+            }
+        }
+        return fillSplitFields(fields, code)
     }
 
     private fun fillSplitFields(fields: List<AccessibilityNodeInfo>, code: String): Boolean {
