@@ -63,7 +63,15 @@ class ConfirmOverlayWindow {
 
     fun attach(host: Context, kind: OverlayWindowKind): Boolean {
         val view = root ?: inflate(host).root as FrameLayout
-        val wm = host.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        // TYPE_APPLICATION_OVERLAY should use the application context's
+        // WindowManager; the accessibility service token is for
+        // TYPE_ACCESSIBILITY_OVERLAY.
+        val wmHost = if (OverlayWindowPolicy.overlayHostIsApplication(kind)) {
+            host.applicationContext
+        } else {
+            host
+        }
+        val wm = wmHost.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         if (view.parent != null) {
             if (attachedKind == kind && windowManager === wm) {
                 forceVisible()
@@ -87,7 +95,10 @@ class ConfirmOverlayWindow {
 
     fun isVisiblyAttached(): Boolean {
         val v = root
-        return v != null && v.parent != null && v.isShown && v.visibility == View.VISIBLE
+        return v != null && OverlayWindowPolicy.isAttachedEnough(
+            hasParent = v.parent != null,
+            visibilityVisible = v.visibility == View.VISIBLE
+        )
     }
 
     fun forceVisible() {

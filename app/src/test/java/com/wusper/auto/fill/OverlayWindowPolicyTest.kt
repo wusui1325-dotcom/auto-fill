@@ -8,13 +8,13 @@ import org.junit.Test
 class OverlayWindowPolicyTest {
 
     @Test
-    fun applicationIsTriedFirstWhenPermissionGranted() {
+    fun accessibilityIsTriedFirstWhenConnected() {
         val types = OverlayWindowPolicy.typesToTry(
             accessibilityConnected = true,
             canDrawOverlays = true
         )
         assertEquals(
-            listOf(OverlayWindowKind.APPLICATION, OverlayWindowKind.ACCESSIBILITY),
+            listOf(OverlayWindowKind.ACCESSIBILITY, OverlayWindowKind.APPLICATION),
             types
         )
     }
@@ -77,5 +77,18 @@ class OverlayWindowPolicyTest {
         assertTrue(ConnectionUi.buttonEnabled(OverlayWindowPolicy.overlayButton(false)))
         assertEquals(PermissionButtonKind.CONNECTED, OverlayWindowPolicy.overlayButton(true))
         assertFalse(ConnectionUi.buttonEnabled(OverlayWindowPolicy.overlayButton(true)))
+    }
+
+    @Test
+    fun attachedEnoughDoesNotRequireIsShown() {
+        assertTrue(OverlayWindowPolicy.isAttachedEnough(hasParent = true, visibilityVisible = true))
+        assertFalse(OverlayWindowPolicy.isAttachedEnough(hasParent = false, visibilityVisible = true))
+        assertFalse(OverlayWindowPolicy.isAttachedEnough(hasParent = true, visibilityVisible = false))
+    }
+
+    @Test
+    fun applicationOverlayUsesApplicationWindowHost() {
+        assertTrue(OverlayWindowPolicy.overlayHostIsApplication(OverlayWindowKind.APPLICATION))
+        assertFalse(OverlayWindowPolicy.overlayHostIsApplication(OverlayWindowKind.ACCESSIBILITY))
     }
 }

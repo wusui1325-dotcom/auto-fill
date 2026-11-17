@@ -2,8 +2,10 @@ package com.wusper.auto.fill
 
 /**
  * Which confirm-overlay window types to try, and in what order.
- * Accessibility overlay needs no extra permission; application overlay
- * (display over other apps) is the reliable path once the user has granted it.
+ * The accessibility overlay can cover the current webpage while this app
+ * is in the background. The application overlay (display over other apps)
+ * is the fallback when accessibility is not connected, or if the
+ * accessibility overlay cannot attach.
  */
 enum class OverlayWindowKind {
     ACCESSIBILITY,
@@ -13,22 +15,23 @@ enum class OverlayWindowKind {
 object OverlayWindowPolicy {
 
     /**
-     * Prefer TYPE_APPLICATION_OVERLAY when display-over-apps is granted:
-     * it reliably covers the current webpage, and trying the accessibility
-     * overlay first would mean detaching a visible sheet to "upgrade".
-     * The accessibility overlay remains the fallback when that permission
-     * is missing, or if the application overlay cannot attach.
+     * Try the accessibility overlay first when that service is the host.
+     * If the user has granted display-over-apps, also try
+     * TYPE_APPLICATION_OVERLAY, including when accessibility is not connected.
+     * Do not prefer the application overlay first: some systems hide it
+     * while this app is in the background, so the sheet only appears
+     * after the user opens 填碼.
      */
     fun typesToTry(
         accessibilityConnected: Boolean,
         canDrawOverlays: Boolean
     ): List<OverlayWindowKind> {
         val types = ArrayList<OverlayWindowKind>(2)
-        if (canDrawOverlays) {
-            types.add(OverlayWindowKind.APPLICATION)
-        }
         if (accessibilityConnected) {
             types.add(OverlayWindowKind.ACCESSIBILITY)
+        }
+        if (canDrawOverlays) {
+            types.add(OverlayWindowKind.APPLICATION)
         }
         return types
     }
@@ -39,15 +42,29 @@ object OverlayWindowPolicy {
     ): Boolean = typesToTry(accessibilityConnected, canDrawOverlays).isNotEmpty()
 
     /**
-     * Do not detach a visible overlay to switch types. Application is already
-     * tried first when the permission is granted, so this stays false.
-     * Kept for the presenter and existing tests.
+     * Never detach a visible overlay to switch types. If the accessibility
+     * overlay is already up, keep it; the application overlay is only used
+     * when accessibility did not attach.
      */
     fun shouldUpgradeToApplication(
         current: OverlayWindowKind?,
         remainingTypes: List<OverlayWindowKind>
     ): Boolean {
         return false
+    }
+
+    /**
+     * A window is attached enough once it has a parent and is VISIBLE.
+     * View.isShown can stay false for overlays before layout, or on some
+     * systems, and must not be required or the prompt falls back to the app.
+     */
+    fun isAttachedEnough(
+        hasParent: Boolean,
+        visibilityVisible: Boolean
+    ): Boolean = hasParent && visibilityVisible
+
+    fun overlayHostIsApplication(kind: OverlayWindowKind): Boolean {
+        return kind == OverlayWindowKind.APPLICATION
     }
 
     fun overlayButton(canDrawOverlays: Boolean): PermissionButtonKind {

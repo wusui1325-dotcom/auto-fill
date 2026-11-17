@@ -8,8 +8,8 @@ import android.provider.Settings
 
 /**
  * Single owner of the confirm overlay view.
- * Tries TYPE_APPLICATION_OVERLAY first when display-over-apps is granted,
- * then the accessibility overlay when the service is the host.
+ * Tries the accessibility overlay first when the service is the host and keeps it if it attaches;
+ * TYPE_APPLICATION_OVERLAY is only the fallback.
  */
 object ConfirmOverlayPresenter {
     private val main = Handler(Looper.getMainLooper())
@@ -99,6 +99,10 @@ object ConfirmOverlayPresenter {
             scheduleRetryOrNext()
             return
         }
+        // addView already succeeded; do not wait for a later isShown check
+        // or the 700–2500 ms fallback will open the in-app screen instead.
+        shownKey = pendingKey(pending)
+        ConfirmPromptController.reportOverlayAttached(true)
         main.post { verify(pending) }
     }
 
