@@ -47,8 +47,17 @@ class OtpAccessibilityService : AccessibilityService() {
             if (pending == null) {
                 hideOverlay()
             } else {
-                prefetchTarget()
+                // Show the overlay first. Walking the window tree to prefetch a
+                // field can be slow (or throw) and must not delay or prevent it;
+                // otherwise the confirm UI falls back to the in-app screen.
                 showPrompt(pending)
+                handler.post {
+                    try {
+                        prefetchTarget()
+                    } catch (_: Exception) {
+                        // Finding a field must never crash the prompt path.
+                    }
+                }
             }
         }
     }
@@ -235,7 +244,14 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     private fun isOtpNode(node: AccessibilityNodeInfo): Boolean {
-        return OtpFieldDetector.isOtpField(node.toSnapshot())
+        return try {
+            // Skip labeledBy / extras work on text, buttons, and other non-fields
+            // during window-tree walks so the confirm overlay is not delayed.
+            if (!node.isEditable && !node.isPassword && !node.isFocused) return false
+            OtpFieldDetector.isOtpField(node.toSnapshot())
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private fun AccessibilityNodeInfo.toSnapshot(): FieldSnapshot {
@@ -261,11 +277,13 @@ class OtpAccessibilityService : AccessibilityService() {
         } catch (_: Exception) {
             null
         } ?: return null
-        return try {
-            listOf(label.text?.toString(), label.contentDescription?.toString(), label.hintText?.toString())
+        try {
+            return listOf(label.text?.toString(), label.contentDescription?.toString(), label.hintText?.toString())
                 .mapNotNull { it?.trim()?.takeIf { s -> s.isNotEmpty() } }
                 .joinToString(" ")
                 .ifBlank { null }
+        } catch (_: Exception) {
+            return null
         } finally {
             label.recycleQuietly()
         }
@@ -711,7 +729,12 @@ class OtpAccessibilityService : AccessibilityService() {
     private fun findOtpDescendant(node: AccessibilityNodeInfo, budget: Int): Pair<AccessibilityNodeInfo?, Int> {
         var remaining = budget - 1
         if (remaining < 0) return null to 0
-        if (isOtpNode(node) || isNearbyLabeledOtp(node)) return obtainCopy(node) to remaining
+        val otp = try {
+            isOtpNode(node) || isNearbyLabeledOtp(node)
+        } catch (_: Exception) {
+            false
+        }
+        if (otp) return obtainCopy(node) to remaining
         for (i in 0 until node.childCount) {
             if (remaining <= 0) break
             val child = node.getChild(i) ?: continue
