@@ -28,9 +28,10 @@
     <string name="first_run_title">Grant access first</string>
     <string name="first_run_body">OTP Fill reads notifications after you focus an OTP field or start watching manually. Watching does not stop on its own; it stops only when you tap Stop watching or turn the switch off. When a 4–8 digit code arrives, a half-screen prompt asks whether to fill it. The code is written into the field only after you tap Fill. The full code is not left on the clipboard, and the SMS inbox is never read.
 
-Two system permissions are required:
+The following system permissions are required:
 • Notification access: while watching, read the code and a short source name from notifications
-• Accessibility: detect the OTP field, show the confirm prompt, and fill the field after you agree</string>
+• Accessibility: detect the OTP field, and fill the field after you agree
+• Display over other apps: so the confirm half-screen can appear over the current webpage or app, without first opening OTP Fill</string>
     <string name="first_run_got_it">Got it</string>
 
     <string name="rationale_listener">Notification access is used only while watching, to extract a verification code. The SMS inbox is not read, and the confirm prompt never shows the full SMS or email body.</string>
@@ -109,6 +110,12 @@ Two system permissions are required:
     <string name="confirm_notification_channel_desc">Shows a confirm notification when a code arrives. Only the extracted code and a short source are included, never the full message body.</string>
     <string name="confirm_notification_text">%1$s · Source: %2$s</string>
     <string name="status_prompt_blocked">If the confirm prompt did not appear over the webpage, some systems need a background-popup or notification permission.</string>
+
+    <string name="status_overlay_on">Display over other apps: allowed</string>
+    <string name="status_overlay_off">Display over other apps: not allowed</string>
+    <string name="btn_grant_overlay">Allow display over other apps</string>
+    <string name="btn_overlay_granted">Display over other apps allowed</string>
+    <string name="rationale_overlay">This lets the confirm half-screen appear over the current webpage or app, without first opening OTP Fill. You turn it on in system settings.</string>
 </resources>
 
 

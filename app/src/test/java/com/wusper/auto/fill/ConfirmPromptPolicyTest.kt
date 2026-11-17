@@ -92,4 +92,45 @@ class ConfirmPromptPolicyTest {
         assertTrue(plan.cancelNotification)
         assertTrue(plan.finishConfirmActivity)
     }
+
+    @Test
+    fun waitWhenOverlayPermissionGrantedButAccessibilityIsDown() {
+        val plan = ConfirmPromptPolicy.plan(
+            hasPending = true,
+            accessibilityConnected = false,
+            overlayAttached = false,
+            overlayRetriesExhausted = false,
+            canDrawOverlays = true
+        )
+        assertEquals(PromptSurface.WAIT_FOR_OVERLAY, plan.surface)
+        assertFalse(plan.showNotification)
+        assertFalse(plan.startConfirmActivity)
+    }
+
+    @Test
+    fun fallbackWhenNeitherOverlayPathIsAvailable() {
+        val plan = ConfirmPromptPolicy.plan(
+            hasPending = true,
+            accessibilityConnected = false,
+            overlayAttached = false,
+            overlayRetriesExhausted = false,
+            canDrawOverlays = false
+        )
+        assertEquals(PromptSurface.FALLBACK, plan.surface)
+        assertTrue(plan.showNotification)
+        assertTrue(plan.startConfirmActivity)
+    }
+
+    @Test
+    fun fallbackAfterOverlayRetriesExhaustedEvenWithDrawOverlays() {
+        val plan = ConfirmPromptPolicy.plan(
+            hasPending = true,
+            accessibilityConnected = false,
+            overlayAttached = false,
+            overlayRetriesExhausted = true,
+            canDrawOverlays = true
+        )
+        assertEquals(PromptSurface.FALLBACK, plan.surface)
+        assertTrue(plan.showNotification)
+    }
 }

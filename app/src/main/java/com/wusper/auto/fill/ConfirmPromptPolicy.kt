@@ -2,8 +2,9 @@ package com.wusper.auto.fill
 
 /**
  * Pure decision helper for the confirm prompt.
- * Prefers the accessibility overlay; falls back to a heads-up notification
- * and ConfirmActivity only when the overlay cannot be shown.
+ * Prefers an overlay (accessibility and/or display-over-apps);
+ * falls back to a heads-up notification and ConfirmActivity only
+ * when no overlay can be shown.
  */
 enum class PromptSurface {
     NONE,
@@ -30,7 +31,8 @@ object ConfirmPromptPolicy {
         hasPending: Boolean,
         accessibilityConnected: Boolean,
         overlayAttached: Boolean,
-        overlayRetriesExhausted: Boolean
+        overlayRetriesExhausted: Boolean,
+        canDrawOverlays: Boolean = false
     ): PromptPlan {
         if (!hasPending) {
             return PromptPlan(
@@ -50,7 +52,11 @@ object ConfirmPromptPolicy {
                 finishConfirmActivity = true
             )
         }
-        if (accessibilityConnected && !overlayRetriesExhausted) {
+        val canAttempt = OverlayWindowPolicy.canAttemptOverlay(
+            accessibilityConnected = accessibilityConnected,
+            canDrawOverlays = canDrawOverlays
+        )
+        if (canAttempt && !overlayRetriesExhausted) {
             return PromptPlan(
                 surface = PromptSurface.WAIT_FOR_OVERLAY,
                 showNotification = false,

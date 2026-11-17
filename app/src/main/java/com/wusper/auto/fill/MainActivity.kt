@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnListener.setOnClickListener { Permissions.openNotificationListenerSettings(this) }
         binding.btnAccessibility.setOnClickListener { Permissions.openAccessibilitySettings(this) }
+        binding.btnOverlay.setOnClickListener { Permissions.openOverlaySettings(this) }
         binding.btnTotp.setOnClickListener {
             startActivity(Intent(this, TotpActivity::class.java))
         }
@@ -132,6 +133,10 @@ class MainActivity : AppCompatActivity() {
                 else -> R.string.status_accessibility_off
             }
         )
+        val overlayOn = Permissions.canDrawOverlays(this)
+        binding.statusOverlay.text = getString(
+            if (overlayOn) R.string.status_overlay_on else R.string.status_overlay_off
+        )
         binding.statusWatch.text = getString(
             when (watch) {
                 WatchStatusKind.DISABLED -> R.string.status_disabled
@@ -160,6 +165,15 @@ class MainActivity : AppCompatActivity() {
                 PermissionButtonKind.CONNECTED -> R.string.btn_accessibility_granted
                 PermissionButtonKind.RECONNECT -> R.string.btn_reconnect_accessibility
                 PermissionButtonKind.GRANT -> R.string.btn_grant_accessibility
+            }
+        )
+        val overlayButton = OverlayWindowPolicy.overlayButton(overlayOn)
+        binding.btnOverlay.isEnabled = ConnectionUi.buttonEnabled(overlayButton)
+        binding.btnOverlay.text = getString(
+            if (overlayButton == PermissionButtonKind.CONNECTED) {
+                R.string.btn_overlay_granted
+            } else {
+                R.string.btn_grant_overlay
             }
         )
 

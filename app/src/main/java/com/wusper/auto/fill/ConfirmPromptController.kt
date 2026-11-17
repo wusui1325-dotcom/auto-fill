@@ -1,6 +1,7 @@
 package com.wusper.auto.fill
 
 import android.content.Context
+import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.CopyOnWriteArrayList
@@ -73,14 +74,16 @@ object ConfirmPromptController {
 
     private fun apply(snap: SessionSnapshot, startContext: Context?) {
         val pending = snap.pending
+        val ctx = app ?: return
+        val canDraw = Settings.canDrawOverlays(ctx)
         val plan = ConfirmPromptPolicy.plan(
             hasPending = pending != null,
             accessibilityConnected = snap.accessibilityConnected,
             overlayAttached = overlayAttached,
-            overlayRetriesExhausted = overlayRetriesExhausted
+            overlayRetriesExhausted = overlayRetriesExhausted,
+            canDrawOverlays = canDraw
         )
         main.removeCallbacks(waitForOverlay)
-        val ctx = app ?: return
         if (plan.waitMs > 0) {
             main.postDelayed(waitForOverlay, plan.waitMs)
         }
@@ -91,8 +94,16 @@ object ConfirmPromptController {
         if (plan.surface == PromptSurface.NONE) {
             overlayAttached = false
             overlayRetriesExhausted = false
+            ConfirmOverlayPresenter.hide()
             notifyUi()
             return
+        }
+        if (plan.surface == PromptSurface.WAIT_FOR_OVERLAY &&
+            pending != null &&
+            canDraw &&
+            !snap.accessibilityConnected
+        ) {
+            ConfirmOverlayPresenter.show(startContext ?: ctx, pending)
         }
         if (plan.showNotification || plan.startConfirmActivity) {
             if (pending != null) {

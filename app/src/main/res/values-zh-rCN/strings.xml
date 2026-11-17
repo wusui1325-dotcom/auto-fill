@@ -28,9 +28,10 @@
     <string name="first_run_title">使用前请先授权</string>
     <string name="first_run_body">填码会在你进入验证码栏位，或手动开始监看后读取通知。监看不会自动关闭，只会在你按「停止监看」或关掉开关时停止。抽出 4–8 位验证码后半屏询问是否填入。你点「填入」才会写入栏位，不会把完整验证码留在剪贴板，也不会读取短信收件箱。
 
-需要两项系统权限：
+需要以下系统权限：
 • 通知访问：只在监看期间读取通知中的验证码与来源名称
-• 无障碍：检测验证码栏位，显示确认画面，并在你同意后填入该栏位</string>
+• 无障碍：检测验证码栏位，并在你同意后填入该栏位
+• 显示在其他应用上层：让确认半屏可以直接盖在目前网页或 App 上，不必先打开填码</string>
     <string name="first_run_got_it">知道了</string>
 
     <string name="rationale_listener">通知访问用于在监看期间从通知抽出验证码。不会读取短信收件箱，也不会把完整短信或邮件正文显示在确认画面。</string>
@@ -109,6 +110,12 @@
     <string name="confirm_notification_channel_desc">验证码到来时显示确认通知。只包含抽出的验证码与简短来源，不会显示完整短信或邮件正文。</string>
     <string name="confirm_notification_text">%1$s · 来源：%2$s</string>
     <string name="status_prompt_blocked">若确认画面没有出现在网页上，部分系统需允许「后台弹出界面」或通知权限。</string>
+
+    <string name="status_overlay_on">显示在其他应用上层：已允许</string>
+    <string name="status_overlay_off">显示在其他应用上层：未允许</string>
+    <string name="btn_grant_overlay">允许显示在其他应用上层</string>
+    <string name="btn_overlay_granted">已允许显示在其他应用上层</string>
+    <string name="rationale_overlay">用于把确认半屏直接盖在目前网页或 App 上，不必先打开填码。需在系统设置中手动开启。</string>
 </resources>
 
 

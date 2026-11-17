@@ -66,6 +66,41 @@ object Permissions {
         )
     }
 
+    fun canDrawOverlays(context: Context): Boolean {
+        return Settings.canDrawOverlays(context)
+    }
+
+    fun openOverlaySettings(context: Context) {
+        val pkgUri = Uri.parse("package:${context.packageName}")
+        val specific = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            data = pkgUri
+        }
+        try {
+            if (specific.resolveActivity(context.packageManager) != null) {
+                context.startActivity(specific)
+                return
+            }
+        } catch (_: Exception) {
+            // Fall through to the generic list.
+        }
+        try {
+            context.startActivity(
+                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            return
+        } catch (_: Exception) {
+            // Last resort: app details, where some OEMs also expose the toggle.
+        }
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                data = pkgUri
+            }
+        )
+    }
+
     fun openAccessibilitySettings(context: Context) {
         val cn = ComponentName(context, OtpAccessibilityService::class.java)
         val detail = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {

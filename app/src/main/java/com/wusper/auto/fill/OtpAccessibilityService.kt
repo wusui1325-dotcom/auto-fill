@@ -4,26 +4,16 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
-import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
-import android.view.LayoutInflater
-import android.view.View
-import android.view.WindowInsets
-import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.FrameLayout
 import android.widget.Toast
-import androidx.appcompat.view.ContextThemeWrapper
-import com.google.android.material.color.DynamicColors
-import com.wusper.auto.fill.databinding.ViewConfirmBinding
 
 /**
  * Detects OTP fields, shows the confirm prompt, and fills the focused field after the user agrees.
@@ -33,25 +23,14 @@ class OtpAccessibilityService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var unobserve: (() -> Unit)? = null
-    private var overlay: FrameLayout? = null
-    private var overlayBinding: ViewConfirmBinding? = null
-    private var shownKey: String? = null
     private var savedTarget: AccessibilityNodeInfo? = null
     private var lastFocusedWasOtp = false
     private var lastAppPackage: String? = null
     private var pendingWindowPkg: String? = null
     private var pendingFillCode: String? = null
     private var fillAttempts = 0
-    private var overlayAttempts = 0
     private var imePackages: Set<String> = emptySet()
     private var imePackagesAt = 0L
-
-    private val retryAttachOverlay = object : Runnable {
-        override fun run() {
-            val pending = OtpSession.pending ?: return
-            attachOverlay(pending)
-        }
-    }
 
     private val debounceWindows = Runnable {
         handleWindowEvent(pendingWindowPkg, AccessibilityEvent.TYPE_WINDOWS_CHANGED)
@@ -65,7 +44,7 @@ class OtpAccessibilityService : AccessibilityService() {
             val pending = snap.pending
             if (pending == null) {
                 hideOverlay()
-            } else if (shownKey != pendingKey(pending)) {
+            } else {
                 showPrompt(pending)
             }
         }
@@ -96,7 +75,6 @@ class OtpAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         handler.removeCallbacksAndMessages(null)
         hideOverlay()
-        overlayBinding = null
         OtpSession.fillHandler = null
         unobserve?.invoke()
         unobserve = null
@@ -108,7 +86,6 @@ class OtpAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         hideOverlay()
-        overlayBinding = null
         recycleTarget()
         super.onDestroy()
     }
@@ -311,155 +288,11 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     private fun showPrompt(pending: PendingOtp) {
-        val binding = overlayBinding ?: inflateOverlay()
-        binding.confirmCode.text = pending.code
-        binding.confirmSource.text = getString(R.string.confirm_source, pending.source)
-        binding.btnFill.setOnClickListener { accept(pending) }
-        binding.btnCancel.setOnClickListener { cancel() }
-        binding.confirmRoot.setOnClickListener { cancel() }
-        binding.confirmCard.setOnClickListener { /* swallow */ }
-
-        val root = binding.root as FrameLayout
-        if (overlay === root && root.parent != null && shownKey == pendingKey(pending)) {
-            forceOverlayVisible(root)
-            ConfirmPromptController.reportOverlayAttached(true)
-            return
-        }
-        overlayAttempts = 0
-        handler.removeCallbacks(retryAttachOverlay)
-        attachOverlay(pending)
-    }
-
-    private fun attachOverlay(pending: PendingOtp) {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            handler.post { attachOverlay(pending) }
-            return
-        }
-        if (OtpSession.pending?.let { pendingKey(it) } != pendingKey(pending)) return
-        val binding = overlayBinding ?: inflateOverlay()
-        val root = binding.root as FrameLayout
-        if (root.parent == null) {
-            val params = overlayLayoutParams()
-            try {
-                addOverlay(root, params)
-                overlay = root
-            } catch (_: Exception) {
-                scheduleOverlayRetryOrFail()
-                return
-            }
-        }
-        shownKey = pendingKey(pending)
-        forceOverlayVisible(root)
-        handler.post { verifyOverlayVisible(pending) }
-    }
-
-    private fun overlayLayoutParams(): WindowManager.LayoutParams {
-        val flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            flags,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.BOTTOM
-        params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            params.layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            params.fitInsetsTypes = 0
-            params.fitInsetsSides = 0
-            params.setFitInsetsIgnoringVisibility(true)
-        }
-        return params
-    }
-
-    private fun forceOverlayVisible(root: FrameLayout) {
-        root.visibility = View.VISIBLE
-        root.alpha = 1f
-        root.bringToFront()
-        if (root.width == 0 || root.height == 0) {
-            root.requestLayout()
-        }
-    }
-
-    private fun verifyOverlayVisible(pending: PendingOtp) {
-        if (OtpSession.pending?.let { pendingKey(it) } != pendingKey(pending)) return
-        val view = overlay
-        if (view != null && view.parent != null && view.isShown && view.visibility == View.VISIBLE) {
-            ConfirmPromptController.reportOverlayAttached(true)
-            return
-        }
-        if (view != null && view.parent != null) {
-            forceOverlayVisible(view)
-            if (view.isShown) {
-                ConfirmPromptController.reportOverlayAttached(true)
-                return
-            }
-        }
-        scheduleOverlayRetryOrFail()
-    }
-
-    private fun scheduleOverlayRetryOrFail() {
-        overlay = overlay.takeIf { it?.parent != null }
-        shownKey = null
-        ConfirmPromptController.reportOverlayAttached(false)
-        overlayAttempts++
-        if (overlayAttempts < ConfirmPromptPolicy.OVERLAY_RETRY_LIMIT) {
-            val delay = ConfirmPromptPolicy.OVERLAY_RETRY_DELAY_MS * overlayAttempts
-            handler.removeCallbacks(retryAttachOverlay)
-            handler.postDelayed(retryAttachOverlay, delay)
-        } else {
-            ConfirmPromptController.reportOverlayFailed(this)
-        }
-    }
-
-    private fun inflateOverlay(): ViewConfirmBinding {
-        val themed = DynamicColors.wrapContextIfAvailable(
-            ContextThemeWrapper(this, R.style.Theme_AutoFill)
-        )
-        val binding = ViewConfirmBinding.inflate(LayoutInflater.from(themed))
-        overlayBinding = binding
-        return binding
-    }
-
-    private fun addOverlay(view: FrameLayout, params: WindowManager.LayoutParams) {
-        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        wm.addView(view, params)
+        ConfirmOverlayPresenter.show(this, pending)
     }
 
     private fun hideOverlay() {
-        handler.removeCallbacks(retryAttachOverlay)
-        shownKey = null
-        val view = overlay
-        overlay = null
-        ConfirmPromptController.reportOverlayAttached(false)
-        if (view == null) return
-        try {
-            val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-            wm.removeViewImmediate(view)
-        } catch (_: Exception) {
-            try {
-                (getSystemService(WINDOW_SERVICE) as WindowManager).removeView(view)
-            } catch (_: Exception) {
-                // Already detached.
-            }
-        }
-    }
-
-    private fun accept(pending: PendingOtp) {
-        if (OtpSession.pending?.code != pending.code) {
-            hideOverlay()
-            return
-        }
-        hideOverlay()
-        val accepted = OtpSession.confirmFill()
-        if (!accepted) {
-            Toast.makeText(this, R.string.fill_failed, Toast.LENGTH_SHORT).show()
-        }
+        ConfirmOverlayPresenter.hide()
     }
 
     private fun scheduleFill(code: String): Boolean {
@@ -487,11 +320,6 @@ class OtpAccessibilityService : AccessibilityService() {
                 Toast.makeText(this@OtpAccessibilityService, R.string.fill_failed, Toast.LENGTH_SHORT).show()
             }
         }
-    }
-
-    private fun cancel() {
-        hideOverlay()
-        OtpSession.cancelConfirm()
     }
 
     private fun fillCode(code: String): Boolean {
@@ -909,10 +737,6 @@ class OtpAccessibilityService : AccessibilityService() {
                 // Best-effort restore so a pasted code does not stay on the clipboard.
             }
         }
-    }
-
-    private fun pendingKey(pending: PendingOtp): String {
-        return "${pending.packageName}|${pending.notificationKey}|${pending.code}"
     }
 
     private fun obtainCopy(node: AccessibilityNodeInfo): AccessibilityNodeInfo {
