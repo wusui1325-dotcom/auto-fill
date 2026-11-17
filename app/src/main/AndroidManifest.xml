@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
@@ -60,10 +62,11 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:autoRemoveFromRecents="true"
-            android:finishOnTaskLaunch="true"
             android:launchMode="singleInstance"
-            android:taskAffinity=""
-            android:theme="@style/Theme.AutoFill.Confirm" />
+            android:showWhenLocked="true"
+            android:taskAffinity="com.wusper.auto.fill.confirm"
+            android:theme="@style/Theme.AutoFill.Confirm"
+            android:turnScreenOn="true" />
 
         <service
             android:name=".OtpAccessibilityService"

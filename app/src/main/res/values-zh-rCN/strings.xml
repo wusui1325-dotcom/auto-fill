@@ -104,6 +104,11 @@
     <string name="btn_reconnect_listener">重新连线通知访问</string>
     <string name="btn_reconnect_accessibility">重新连线无障碍</string>
     <string name="status_services_disconnected">监看：服务尚未连线，请重新连线</string>
+
+    <string name="confirm_notification_channel">验证码确认</string>
+    <string name="confirm_notification_channel_desc">验证码到来时显示确认通知。只包含抽出的验证码与简短来源，不会显示完整短信或邮件正文。</string>
+    <string name="confirm_notification_text">%1$s · 来源：%2$s</string>
+    <string name="status_prompt_blocked">若确认画面没有出现在网页上，部分系统需允许「后台弹出界面」或通知权限。</string>
 </resources>
 
 

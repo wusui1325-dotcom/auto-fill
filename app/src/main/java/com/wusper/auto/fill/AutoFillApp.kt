@@ -13,6 +13,7 @@ class AutoFillApp : Application() {
         prefs = Prefs(this)
         OtpSession.setMasterEnabled(prefs.masterEnabled)
         ListenerRebind.scheduleIfNeeded(this)
+        ConfirmPromptController.start(this)
     }
 }
 

@@ -4,7 +4,7 @@
 
 顯示名稱：填碼  
 applicationId：`com.wusper.auto.fill`  
-介面預設繁體中文，另有简体中文與 English。Material 3 / Material You 動態色彩。目前發行版本：0.1.4。
+介面預設繁體中文，另有简体中文與 English。Material 3 / Material You 動態色彩。目前發行版本：0.1.5。
 
 ## 行為
 
@@ -18,6 +18,7 @@ applicationId：`com.wusper.auto.fill`
 - 主畫面按鈕可進入獨立的內建驗證器頁面：離線產生 6 位 TOTP（otpauth 預設 SHA1／30 秒，也可讀取 SHA256／SHA512），密鑰以系統 Keystore 加密存放在本應用，支援匯入與匯出（可選密碼）。可掃描或匯入 otpauth 與 Google Authenticator 匯出（otpauth-migration）二維碼或圖片。填入仍需半屏確認。相機權限只在掃描時才會申請。
 - 0.1.3 起：點「填入」後會先收起確認畫面再重新定位網頁／App 欄位（含 Cloudflare Access 等 WebView），並依序嘗試 SET_TEXT、暫時貼上（隨即還原剪貼簿）與逐字輸入。
 - 0.1.4 起：蓋版後若通知存取或無障礙顯示「已開啟但尚未連線」，按鈕可一鍵打開系統設定重連；監看狀態不會在服務未連線時顯示進行中。通知監聽會在短暫等待後嘗試 requestRebind。
+- 0.1.5 起：確認半屏優先以無障礙浮層直接蓋在目前網頁或 App 上；若浮層無法顯示，或無障礙尚未連線，改以高優先通知（必要時全屏意圖）打開確認畫面，無需先進入填碼。通知只顯示抽出的驗證碼與簡短來源。
 
 ## 權限
 
@@ -48,4 +49,4 @@ KEY_PASSWORD
 
 MIT
 
-目前發行版本：0.1.4。
+目前發行版本：0.1.5。

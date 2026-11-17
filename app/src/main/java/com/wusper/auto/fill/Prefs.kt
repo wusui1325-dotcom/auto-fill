@@ -17,8 +17,15 @@ class Prefs(context: Context) {
             sp.edit().putBoolean(KEY_FIRST_RUN, value).apply()
         }
 
+    var notificationPermissionAsked: Boolean
+        get() = sp.getBoolean(KEY_NOTIF_ASKED, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_NOTIF_ASKED, value).apply()
+        }
+
     private companion object {
         const val KEY_MASTER = "master_enabled"
         const val KEY_FIRST_RUN = "first_run_done"
+        const val KEY_NOTIF_ASKED = "notification_permission_asked"
     }
 }

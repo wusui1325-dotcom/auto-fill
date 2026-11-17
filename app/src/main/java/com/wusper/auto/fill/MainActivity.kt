@@ -1,9 +1,14 @@
 package com.wusper.auto.fill
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -13,7 +18,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var prefs: Prefs
     private var unobserve: (() -> Unit)? = null
+    private var unobservePrompt: (() -> Unit)? = null
     private var updatingSwitch = false
+
+    private val requestNotifications = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Fail-open: overlay still works without this permission. */ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,18 +68,39 @@ class MainActivity : AppCompatActivity() {
         unobserve = OtpSession.observe { snap ->
             if (!isDestroyed && !isFinishing) render(snap)
         }
+        unobservePrompt = ConfirmPromptController.observeUi {
+            if (!isDestroyed && !isFinishing) render(OtpSession.snapshot())
+        }
     }
 
     override fun onResume() {
         super.onResume()
         ListenerRebind.scheduleIfNeeded(this)
+        maybeAskNotificationPermission()
         render(OtpSession.snapshot())
     }
 
     override fun onDestroy() {
         unobserve?.invoke()
         unobserve = null
+        unobservePrompt?.invoke()
+        unobservePrompt = null
         super.onDestroy()
+    }
+
+    private fun maybeAskNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        if (!ConfirmPromptController.fallbackAttempted && !ConfirmPromptController.lastDeliveryFailed) {
+            return
+        }
+        if (prefs.notificationPermissionAsked) return
+        prefs.notificationPermissionAsked = true
+        requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     private fun render(snap: SessionSnapshot) {
@@ -141,5 +172,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnArm.text = getString(
             if (snap.armed) R.string.btn_disarm else R.string.btn_arm_now
         )
+
+        binding.statusPromptHint.visibility =
+            if (ConfirmPromptController.lastDeliveryFailed) View.VISIBLE else View.GONE
     }
 }

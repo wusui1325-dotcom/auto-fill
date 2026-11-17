@@ -104,6 +104,11 @@ Two system permissions are required:
     <string name="btn_reconnect_listener">Reconnect notification access</string>
     <string name="btn_reconnect_accessibility">Reconnect accessibility</string>
     <string name="status_services_disconnected">Watching: services not connected, please reconnect</string>
+
+    <string name="confirm_notification_channel">Verification code confirm</string>
+    <string name="confirm_notification_channel_desc">Shows a confirm notification when a code arrives. Only the extracted code and a short source are included, never the full message body.</string>
+    <string name="confirm_notification_text">%1$s · Source: %2$s</string>
+    <string name="status_prompt_blocked">If the confirm prompt did not appear over the webpage, some systems need a background-popup or notification permission.</string>
 </resources>
 
 

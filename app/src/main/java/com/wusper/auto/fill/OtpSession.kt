@@ -108,9 +108,8 @@ object OtpSession {
     }
 
     fun setAccessibilityConnected(connected: Boolean) {
-        if (accessibilityConnected == connected && (connected || pending == null)) return
+        if (accessibilityConnected == connected) return
         accessibilityConnected = connected
-        if (!connected) clearPendingLocked()
         notifyChanged()
     }
 
