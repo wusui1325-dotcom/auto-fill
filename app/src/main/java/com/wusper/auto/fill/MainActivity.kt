@@ -25,6 +25,12 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* Fail-open: overlay still works without this permission. */ }
 
+    private val requestSms = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        if (!isDestroyed && !isFinishing) render(OtpSession.snapshot())
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -54,6 +60,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnListener.setOnClickListener { Permissions.openNotificationListenerSettings(this) }
         binding.btnAccessibility.setOnClickListener { Permissions.openAccessibilitySettings(this) }
         binding.btnOverlay.setOnClickListener { Permissions.openOverlaySettings(this) }
+        binding.btnSms.setOnClickListener { requestSmsPermission() }
         binding.btnTotp.setOnClickListener {
             startActivity(Intent(this, TotpActivity::class.java))
         }
@@ -87,6 +94,18 @@ class MainActivity : AppCompatActivity() {
         unobservePrompt?.invoke()
         unobservePrompt = null
         super.onDestroy()
+    }
+
+    private fun requestSmsPermission() {
+        if (Permissions.hasReceiveSms(this)) return
+        if (prefs.smsPermissionAsked &&
+            !shouldShowRequestPermissionRationale(Manifest.permission.RECEIVE_SMS)
+        ) {
+            Permissions.openAppDetailsSettings(this)
+            return
+        }
+        prefs.smsPermissionAsked = true
+        requestSms.launch(Manifest.permission.RECEIVE_SMS)
     }
 
     private fun maybeAskNotificationPermission() {
@@ -137,6 +156,10 @@ class MainActivity : AppCompatActivity() {
         binding.statusOverlay.text = getString(
             if (overlayOn) R.string.status_overlay_on else R.string.status_overlay_off
         )
+        val smsOn = Permissions.hasReceiveSms(this)
+        binding.statusSms.text = getString(
+            if (smsOn) R.string.status_sms_on else R.string.status_sms_off
+        )
         binding.statusWatch.text = getString(
             when (watch) {
                 WatchStatusKind.DISABLED -> R.string.status_disabled
@@ -174,6 +197,15 @@ class MainActivity : AppCompatActivity() {
                 R.string.btn_overlay_granted
             } else {
                 R.string.btn_grant_overlay
+            }
+        )
+        val smsButton = OverlayWindowPolicy.overlayButton(smsOn)
+        binding.btnSms.isEnabled = ConnectionUi.buttonEnabled(smsButton)
+        binding.btnSms.text = getString(
+            if (smsButton == PermissionButtonKind.CONNECTED) {
+                R.string.btn_sms_granted
+            } else {
+                R.string.btn_grant_sms
             }
         )
 

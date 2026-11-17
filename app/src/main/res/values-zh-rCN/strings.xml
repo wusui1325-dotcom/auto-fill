@@ -31,7 +31,8 @@
 需要以下系统权限：
 • 通知访问：只在监看期间读取通知中的验证码与来源名称
 • 无障碍：检测验证码栏位，并在你同意后填入该栏位
-• 显示在其他应用上层：让确认半屏可以直接盖在目前网页或 App 上，不必先打开填码</string>
+• 显示在其他应用上层：让确认半屏可以直接盖在目前网页或 App 上，不必先打开填码
+• 接收短信（可选）：在通知出现前拦截到来的短信验证码，不会读取收件箱</string>
     <string name="first_run_got_it">知道了</string>
 
     <string name="rationale_listener">通知访问用于在监看期间从通知抽出验证码。不会读取短信收件箱，也不会把完整短信或邮件正文显示在确认画面。</string>
@@ -116,6 +117,13 @@
     <string name="btn_grant_overlay">允许显示在其他应用上层</string>
     <string name="btn_overlay_granted">已允许显示在其他应用上层</string>
     <string name="rationale_overlay">用于把确认半屏直接盖在目前网页或 App 上，不必先打开填码。需在系统设置中手动开启。</string>
+
+    <string name="status_sms_on">接收短信：已允许</string>
+    <string name="status_sms_off">接收短信：未允许</string>
+    <string name="btn_grant_sms">允许接收短信验证码</string>
+    <string name="btn_sms_granted">已允许接收短信验证码</string>
+    <string name="rationale_sms">用于在通知出现前拦截到来的短信验证码。不会读取短信收件箱。确认画面只显示抽出的验证码与简短来源，仍须你按「填入」才会写入。未授权时仍可从通知监看。邮件与 RCS 仍走通知。</string>
+    <string name="source_sms">短信</string>
 </resources>
 
 

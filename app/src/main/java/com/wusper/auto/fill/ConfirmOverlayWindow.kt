@@ -23,16 +23,20 @@ class ConfirmOverlayWindow {
     var attachedKind: OverlayWindowKind? = null
         private set
     private var windowManager: WindowManager? = null
+    private var acceptHandled = false
 
     fun bind(host: Context, pending: PendingOtp) {
         val b = binding ?: inflate(host)
+        acceptHandled = false
         b.confirmCode.text = pending.code
         b.confirmSource.text = host.getString(R.string.confirm_source, pending.source)
         b.btnFill.setOnClickListener {
+            if (acceptHandled) return@setOnClickListener
             if (OtpSession.pending?.code != pending.code) {
                 detach()
                 return@setOnClickListener
             }
+            acceptHandled = true
             detach()
             ConfirmPromptController.reportOverlayAttached(false)
             val accepted = OtpSession.confirmFill()
@@ -41,11 +45,15 @@ class ConfirmOverlayWindow {
             }
         }
         b.btnCancel.setOnClickListener {
+            if (acceptHandled) return@setOnClickListener
+            acceptHandled = true
             detach()
             ConfirmPromptController.reportOverlayAttached(false)
             OtpSession.cancelConfirm()
         }
         b.confirmRoot.setOnClickListener {
+            if (acceptHandled) return@setOnClickListener
+            acceptHandled = true
             detach()
             ConfirmPromptController.reportOverlayAttached(false)
             OtpSession.cancelConfirm()

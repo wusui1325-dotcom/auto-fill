@@ -31,7 +31,8 @@
 需要以下系統權限：
 • 通知存取：只在監看期間讀取通知中的驗證碼與來源名稱
 • 無障礙：偵測驗證碼欄位，並在你同意後填入該欄位
-• 顯示在其他應用上層：讓確認半屏可以直接蓋在目前網頁或 App 上，不必先打開填碼</string>
+• 顯示在其他應用上層：讓確認半屏可以直接蓋在目前網頁或 App 上，不必先打開填碼
+• 接收簡訊（可選）：在通知出現前攔截到來的簡訊驗證碼，不會讀取收件匣</string>
     <string name="first_run_got_it">知道了</string>
 
     <string name="rationale_listener">通知存取用於在監看期間從通知抽出驗證碼。不會讀取簡訊收件匣，也不會把完整簡訊或郵件本文顯示在確認畫面。</string>
@@ -116,6 +117,13 @@
     <string name="btn_grant_overlay">允許顯示在其他應用上層</string>
     <string name="btn_overlay_granted">已允許顯示在其他應用上層</string>
     <string name="rationale_overlay">用於把確認半屏直接蓋在目前網頁或 App 上，不必先打開填碼。需在系統設定中手動開啟。</string>
+
+    <string name="status_sms_on">接收簡訊：已允許</string>
+    <string name="status_sms_off">接收簡訊：未允許</string>
+    <string name="btn_grant_sms">允許接收簡訊驗證碼</string>
+    <string name="btn_sms_granted">已允許接收簡訊驗證碼</string>
+    <string name="rationale_sms">用於在通知出現前攔截到來的簡訊驗證碼。不會讀取簡訊收件匣。確認畫面只顯示抽出的驗證碼與簡短來源，仍須你按「填入」才會寫入。未授權時仍可從通知監看。電郵與 RCS 仍走通知。</string>
+    <string name="source_sms">簡訊</string>
 </resources>
 
 

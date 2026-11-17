@@ -23,9 +23,16 @@ class Prefs(context: Context) {
             sp.edit().putBoolean(KEY_NOTIF_ASKED, value).apply()
         }
 
+    var smsPermissionAsked: Boolean
+        get() = sp.getBoolean(KEY_SMS_ASKED, false)
+        set(value) {
+            sp.edit().putBoolean(KEY_SMS_ASKED, value).apply()
+        }
+
     private companion object {
         const val KEY_MASTER = "master_enabled"
         const val KEY_FIRST_RUN = "first_run_done"
         const val KEY_NOTIF_ASKED = "notification_permission_asked"
+        const val KEY_SMS_ASKED = "sms_permission_asked"
     }
 }

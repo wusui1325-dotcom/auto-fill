@@ -29,6 +29,8 @@ class OtpAccessibilityService : AccessibilityService() {
     private var pendingWindowPkg: String? = null
     private var pendingFillCode: String? = null
     private var fillAttempts = 0
+    private var fillInFlight = false
+    private var fillFieldMisses = 0
     private var imePackages: Set<String> = emptySet()
     private var imePackagesAt = 0L
 
@@ -45,6 +47,7 @@ class OtpAccessibilityService : AccessibilityService() {
             if (pending == null) {
                 hideOverlay()
             } else {
+                prefetchTarget()
                 showPrompt(pending)
             }
         }
@@ -297,11 +300,18 @@ class OtpAccessibilityService : AccessibilityService() {
 
     private fun scheduleFill(code: String): Boolean {
         if (code.isBlank()) return false
+        if (fillInFlight && pendingFillCode == code) {
+            hideOverlay()
+            return true
+        }
         hideOverlay()
         pendingFillCode = code
         fillAttempts = 0
+        fillFieldMisses = 0
+        fillInFlight = true
         handler.removeCallbacks(fillAttempt)
-        handler.postDelayed(fillAttempt, FILL_AFTER_DISMISS_MS)
+        // Dismiss first, then fill on the next looper turn so the webpage can regain focus.
+        handler.post(fillAttempt)
         return true
     }
 
@@ -310,15 +320,26 @@ class OtpAccessibilityService : AccessibilityService() {
             val code = pendingFillCode ?: return
             if (fillCode(code)) {
                 pendingFillCode = null
+                fillInFlight = false
                 return
             }
             fillAttempts += 1
-            if (fillAttempts < 2) {
+            val found = resolveTarget()
+            val missedField = found == null
+            if (found != null && found !== savedTarget) found.recycleQuietly()
+            if (missedField) {
+                fillFieldMisses += 1
+                if (fillFieldMisses <= FILL_FIELD_RETRIES) {
+                    handler.postDelayed(this, FILL_RETRY_MS)
+                    return
+                }
+            } else if (fillAttempts < 2) {
                 handler.postDelayed(this, FILL_RETRY_MS)
-            } else {
-                pendingFillCode = null
-                Toast.makeText(this@OtpAccessibilityService, R.string.fill_failed, Toast.LENGTH_SHORT).show()
+                return
             }
+            pendingFillCode = null
+            fillInFlight = false
+            Toast.makeText(this@OtpAccessibilityService, R.string.fill_failed, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -352,10 +373,74 @@ class OtpAccessibilityService : AccessibilityService() {
     private fun fillWholeField(target: AccessibilityNodeInfo, code: String): Boolean {
         if (!canAttemptFill(target)) return false
         prepareFocus(target)
-        if (setText(target, code) && codePresentInNodeOrNearby(target, code)) return true
-        if (pasteText(target, code) && codePresentInNodeOrNearby(target, code)) return true
-        if (typePerChar(target, code) && codePresentInNodeOrNearby(target, code)) return true
-        return false
+        when (FillWritePolicy.beforeWrite(readableCompact(target), code)) {
+            FillWriteAction.STOP_SUCCESS -> return true
+            FillWriteAction.WRITE_SINGLE -> {
+                if (FillWritePolicy.visibleState(readableCompact(target), code) == VisibleCodeState.DOUBLED) {
+                    setText(target, code)
+                    return true
+                }
+            }
+            else -> { }
+        }
+        val setOk = setText(target, code)
+        when (FillWritePolicy.afterSetText(setOk, readableCompact(target), code)) {
+            FillWriteAction.STOP_SUCCESS -> return true
+            FillWriteAction.WRITE_SINGLE -> {
+                setText(target, code)
+                return true
+            }
+            FillWriteAction.FALLBACK_PASTE -> {
+                clearFieldForPaste(target)
+                val pasteOk = pasteText(target, code)
+                when (FillWritePolicy.afterPaste(pasteOk, readableCompact(target), code)) {
+                    FillWriteAction.STOP_SUCCESS -> return true
+                    FillWriteAction.WRITE_SINGLE -> {
+                        setText(target, code)
+                        return true
+                    }
+                    FillWriteAction.FALLBACK_TYPE -> {
+                        if (typePerChar(target, code)) return true
+                    }
+                    else -> { }
+                }
+            }
+            else -> { }
+        }
+        // Nearby-tree is only a last-resort success check after writing has stopped.
+        return codePresentInNodeOrNearby(target, code)
+    }
+
+    private fun clearFieldForPaste(node: AccessibilityNodeInfo) {
+        setText(node, "")
+        try {
+            val args = Bundle()
+            args.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, 0)
+            val end = (node.text?.length ?: 0).coerceAtLeast(64)
+            args.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, end)
+            node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
+        } catch (_: Exception) {
+            // Best-effort; paste still runs after this.
+        }
+    }
+
+    private fun prefetchTarget() {
+        val focused = focusedEditable()
+        if (focused != null) {
+            try {
+                if (!isOurPackage(focused) && !isAddressBar(focused) && isPlausibleTarget(focused)) {
+                    rememberTarget(focused)
+                    return
+                }
+            } finally {
+                focused.recycleQuietly()
+            }
+        }
+        val found = findOtpInWindows()
+        if (found != null) {
+            rememberTarget(found)
+            if (found !== savedTarget) found.recycleQuietly()
+        }
     }
 
     private fun canAttemptFill(node: AccessibilityNodeInfo): Boolean {
@@ -381,9 +466,19 @@ class OtpAccessibilityService : AccessibilityService() {
         for (ch in code) {
             acc.append(ch)
             val soFar = acc.toString()
-            if (setText(node, soFar) && prefixMatches(node, soFar)) continue
+            val setOk = setText(node, soFar)
+            when (FillWritePolicy.afterSetText(setOk, readableCompact(node), soFar)) {
+                FillWriteAction.STOP_SUCCESS -> continue
+                FillWriteAction.WRITE_SINGLE -> {
+                    setText(node, soFar)
+                    continue
+                }
+                else -> { }
+            }
+            if (prefixMatches(node, soFar)) continue
             if (pasteText(node, ch.toString()) && prefixMatches(node, soFar)) continue
             val readable = readableCompact(node)
+            if (readable.isEmpty() && setOk) continue
             if (readable.isNotEmpty() && !FillTargetHeuristics.codeFullyPresent(readable, soFar) &&
                 !readable.startsWith(soFar.filter { it.isLetterOrDigit() }, ignoreCase = true)
             ) {
@@ -693,18 +788,38 @@ class OtpAccessibilityService : AccessibilityService() {
             val node = fields[i]
             val ch = code[i].toString()
             node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-            if (setText(node, ch) && cellHasChar(node, ch)) continue
-            if (pasteOneChar(node, ch) && cellHasChar(node, ch)) continue
-            return false
+            if (FillWritePolicy.cellAlreadyHas(readableCompact(node), ch)) continue
+            val setOk = setText(node, ch)
+            when (FillWritePolicy.afterSetTextCell(setOk, readableCompact(node), ch)) {
+                FillWriteAction.STOP_SUCCESS -> continue
+                FillWriteAction.WRITE_SINGLE -> {
+                    setText(node, ch)
+                    continue
+                }
+                FillWriteAction.FALLBACK_PASTE -> {
+                    if (FillWritePolicy.cellAlreadyHas(readableCompact(node), ch)) continue
+                    clearFieldForPaste(node)
+                    val pasteOk = pasteOneChar(node, ch)
+                    when (FillWritePolicy.afterPaste(pasteOk, readableCompact(node), ch)) {
+                        FillWriteAction.STOP_SUCCESS,
+                        FillWriteAction.WRITE_SINGLE -> continue
+                        else -> {
+                            if (pasteOk && readableCompact(node).isEmpty()) continue
+                            return false
+                        }
+                    }
+                }
+                else -> {
+                    if (setOk && readableCompact(node).isEmpty()) continue
+                    return false
+                }
+            }
         }
         return true
     }
 
     private fun cellHasChar(node: AccessibilityNodeInfo, ch: String): Boolean {
-        node.refresh()
-        val text = node.text?.toString()?.filter { it.isLetterOrDigit() }.orEmpty()
-        val want = ch.filter { it.isLetterOrDigit() }
-        return want.isNotEmpty() && text.equals(want, ignoreCase = true)
+        return FillWritePolicy.cellAlreadyHas(readableCompact(node), ch)
     }
 
     private fun pasteOneChar(node: AccessibilityNodeInfo, ch: String): Boolean {
@@ -759,8 +874,8 @@ class OtpAccessibilityService : AccessibilityService() {
         private const val IME_CACHE_MS = 60_000L
         private const val TREE_BUDGET = 80
         private const val FILL_TREE_BUDGET = 200
-        private const val FILL_AFTER_DISMISS_MS = 180L
-        private const val FILL_RETRY_MS = 280L
+        private const val FILL_RETRY_MS = 40L
+        private const val FILL_FIELD_RETRIES = 4
 
         // Platform stubs on some SDKs omit getAutofillHints(); call it reflectively when present.
         private val GET_AUTOFILL_HINTS = try {

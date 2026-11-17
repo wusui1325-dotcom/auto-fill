@@ -7,6 +7,7 @@
 -keep public class com.wusper.auto.fill.ScanTotpQrActivity { <init>(); }
 -keep public class com.wusper.auto.fill.OtpAccessibilityService { <init>(); }
 -keep public class com.wusper.auto.fill.OtpNotificationListener { <init>(); }
+-keep public class com.wusper.auto.fill.SmsOtpReceiver { <init>(); }
 
 -keep class com.wusper.auto.fill.BuildConfig { *; }
 

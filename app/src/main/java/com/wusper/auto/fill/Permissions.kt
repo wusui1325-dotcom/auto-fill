@@ -1,15 +1,18 @@
 package com.wusper.auto.fill
 
+import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 
 object Permissions {
 
@@ -121,4 +124,19 @@ object Permissions {
         }
         context.startActivity(detail)
     }
+
+    fun hasReceiveSms(context: Context): Boolean {
+        return ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+
+    fun openAppDetailsSettings(context: Context) {
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                data = Uri.parse("package:${context.packageName}")
+            }
+        )
+    }
+
 }

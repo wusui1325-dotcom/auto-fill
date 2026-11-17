@@ -31,7 +31,8 @@
 The following system permissions are required:
 • Notification access: while watching, read the code and a short source name from notifications
 • Accessibility: detect the OTP field, and fill the field after you agree
-• Display over other apps: so the confirm half-screen can appear over the current webpage or app, without first opening OTP Fill</string>
+• Display over other apps: so the confirm half-screen can appear over the current webpage or app, without first opening OTP Fill
+• Receive SMS (optional): catch an incoming SMS verification code at arrival, often before the notification appears. The SMS inbox is not read</string>
     <string name="first_run_got_it">Got it</string>
 
     <string name="rationale_listener">Notification access is used only while watching, to extract a verification code. The SMS inbox is not read, and the confirm prompt never shows the full SMS or email body.</string>
@@ -116,6 +117,13 @@ The following system permissions are required:
     <string name="btn_grant_overlay">Allow display over other apps</string>
     <string name="btn_overlay_granted">Display over other apps allowed</string>
     <string name="rationale_overlay">This lets the confirm half-screen appear over the current webpage or app, without first opening OTP Fill. You turn it on in system settings.</string>
+
+    <string name="status_sms_on">Receive SMS: allowed</string>
+    <string name="status_sms_off">Receive SMS: not allowed</string>
+    <string name="btn_grant_sms">Allow receiving SMS codes</string>
+    <string name="btn_sms_granted">Receiving SMS codes allowed</string>
+    <string name="rationale_sms">This lets OTP Fill catch an incoming SMS verification code at arrival, often before the notification appears. The SMS inbox is not read. The confirm prompt still shows only the extracted code and a short source, and nothing is filled until you tap Fill. If this is denied, watching notifications still works. Email and RCS still come from notifications.</string>
+    <string name="source_sms">SMS</string>
 </resources>
 
 

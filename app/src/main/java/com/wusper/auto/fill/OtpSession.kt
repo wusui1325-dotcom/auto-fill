@@ -116,11 +116,12 @@ object OtpSession {
     fun offerOtp(otp: PendingOtp, now: Long = System.currentTimeMillis()): Boolean {
         if (!arming.isArmed(now)) return false
         if (otp.code.isBlank()) return false
-        val dedupKey = "${otp.packageName}|${otp.notificationKey}|${otp.code}"
+        val keys = OtpOfferDedup.keysFor(otp)
         synchronized(lock) {
             pruneRecent(now)
-            if (recentKeys.any { it.first == dedupKey }) return false
-            recentKeys.addLast(dedupKey to now)
+            if (pending?.code == otp.code) return false
+            if (OtpOfferDedup.isDuplicate(recentKeys, keys, now)) return false
+            keys.forEach { recentKeys.addLast(it to now) }
             pending = otp
         }
         main.removeCallbacks(expirePending)
