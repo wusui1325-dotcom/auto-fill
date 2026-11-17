@@ -47,17 +47,11 @@ class OtpAccessibilityService : AccessibilityService() {
             if (pending == null) {
                 hideOverlay()
             } else {
-                // Show the overlay first. Walking the window tree to prefetch a
-                // field can be slow (or throw) and must not delay or prevent it;
-                // otherwise the confirm UI falls back to the in-app screen.
+                // Only show the confirm overlay here. Walking the window tree
+                // to find a field belongs in the fill path after the user taps
+                // 填入; doing it now can stall the main thread and fall back
+                // to the in-app confirm screen.
                 showPrompt(pending)
-                handler.post {
-                    try {
-                        prefetchTarget()
-                    } catch (_: Exception) {
-                        // Finding a field must never crash the prompt path.
-                    }
-                }
             }
         }
     }
@@ -459,25 +453,6 @@ class OtpAccessibilityService : AccessibilityService() {
             node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
         } catch (_: Exception) {
             // Best-effort; paste still runs after this.
-        }
-    }
-
-    private fun prefetchTarget() {
-        val focused = focusedEditable()
-        if (focused != null) {
-            try {
-                if (!isOurPackage(focused) && !isAddressBar(focused) && isPlausibleTarget(focused)) {
-                    rememberTarget(focused)
-                    return
-                }
-            } finally {
-                focused.recycleQuietly()
-            }
-        }
-        val found = findOtpInWindows()
-        if (found != null) {
-            rememberTarget(found)
-            if (found !== savedTarget) found.recycleQuietly()
         }
     }
 

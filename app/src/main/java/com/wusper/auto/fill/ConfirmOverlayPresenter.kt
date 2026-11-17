@@ -8,8 +8,8 @@ import android.provider.Settings
 
 /**
  * Single owner of the confirm overlay view.
- * Tries the accessibility overlay first when the service is the host,
- * then TYPE_APPLICATION_OVERLAY when display-over-apps is granted.
+ * Tries TYPE_APPLICATION_OVERLAY first when display-over-apps is granted,
+ * then the accessibility overlay when the service is the host.
  */
 object ConfirmOverlayPresenter {
     private val main = Handler(Looper.getMainLooper())

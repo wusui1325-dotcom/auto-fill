@@ -133,4 +133,12 @@ class ConfirmPromptPolicyTest {
         assertEquals(PromptSurface.FALLBACK, plan.surface)
         assertTrue(plan.showNotification)
     }
+
+    @Test
+    fun overlayWaitOutlastsRetryBudgetForBothWindowTypes() {
+        val delay = ConfirmPromptPolicy.OVERLAY_RETRY_DELAY_MS
+        val perType = delay * (1 + 2 + 3)
+        val budget = perType * 2
+        assertTrue(ConfirmPromptPolicy.OVERLAY_WAIT_MS >= budget)
+    }
 }

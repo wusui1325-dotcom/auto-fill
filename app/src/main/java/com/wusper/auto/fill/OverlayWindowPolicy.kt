@@ -13,20 +13,22 @@ enum class OverlayWindowKind {
 object OverlayWindowPolicy {
 
     /**
-     * Always try the accessibility overlay first when that service is connected.
-     * If the user has granted display-over-apps, also try TYPE_APPLICATION_OVERLAY,
-     * including when accessibility is not connected.
+     * Prefer TYPE_APPLICATION_OVERLAY when display-over-apps is granted:
+     * it reliably covers the current webpage, and trying the accessibility
+     * overlay first would mean detaching a visible sheet to "upgrade".
+     * The accessibility overlay remains the fallback when that permission
+     * is missing, or if the application overlay cannot attach.
      */
     fun typesToTry(
         accessibilityConnected: Boolean,
         canDrawOverlays: Boolean
     ): List<OverlayWindowKind> {
         val types = ArrayList<OverlayWindowKind>(2)
-        if (accessibilityConnected) {
-            types.add(OverlayWindowKind.ACCESSIBILITY)
-        }
         if (canDrawOverlays) {
             types.add(OverlayWindowKind.APPLICATION)
+        }
+        if (accessibilityConnected) {
+            types.add(OverlayWindowKind.ACCESSIBILITY)
         }
         return types
     }
@@ -37,16 +39,15 @@ object OverlayWindowPolicy {
     ): Boolean = typesToTry(accessibilityConnected, canDrawOverlays).isNotEmpty()
 
     /**
-     * After an accessibility overlay appears to attach, still switch to the
-     * application overlay when that permission is available, so the prompt
-     * can cover the current webpage on systems that hide accessibility overlays.
+     * Do not detach a visible overlay to switch types. Application is already
+     * tried first when the permission is granted, so this stays false.
+     * Kept for the presenter and existing tests.
      */
     fun shouldUpgradeToApplication(
         current: OverlayWindowKind?,
         remainingTypes: List<OverlayWindowKind>
     ): Boolean {
-        return current == OverlayWindowKind.ACCESSIBILITY &&
-            remainingTypes.contains(OverlayWindowKind.APPLICATION)
+        return false
     }
 
     fun overlayButton(canDrawOverlays: Boolean): PermissionButtonKind {

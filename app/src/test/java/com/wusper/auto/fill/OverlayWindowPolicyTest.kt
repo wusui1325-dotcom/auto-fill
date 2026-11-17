@@ -8,13 +8,13 @@ import org.junit.Test
 class OverlayWindowPolicyTest {
 
     @Test
-    fun accessibilityIsTriedFirstWhenConnected() {
+    fun applicationIsTriedFirstWhenPermissionGranted() {
         val types = OverlayWindowPolicy.typesToTry(
             accessibilityConnected = true,
             canDrawOverlays = true
         )
         assertEquals(
-            listOf(OverlayWindowKind.ACCESSIBILITY, OverlayWindowKind.APPLICATION),
+            listOf(OverlayWindowKind.APPLICATION, OverlayWindowKind.ACCESSIBILITY),
             types
         )
     }
@@ -50,8 +50,8 @@ class OverlayWindowPolicyTest {
     }
 
     @Test
-    fun upgradesFromAccessibilityToApplicationWhenPermissionGranted() {
-        assertTrue(
+    fun doesNotDetachAVisibleOverlayToUpgrade() {
+        assertFalse(
             OverlayWindowPolicy.shouldUpgradeToApplication(
                 OverlayWindowKind.ACCESSIBILITY,
                 listOf(OverlayWindowKind.APPLICATION)

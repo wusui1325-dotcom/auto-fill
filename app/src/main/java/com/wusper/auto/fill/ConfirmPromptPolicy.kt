@@ -23,7 +23,9 @@ data class PromptPlan(
 )
 
 object ConfirmPromptPolicy {
-    const val OVERLAY_WAIT_MS = 700L
+    // Must exceed the overlay retry budget for both window types
+    // (delays 150+300+450 ms each) plus a short attach margin.
+    const val OVERLAY_WAIT_MS = 2500L
     const val OVERLAY_RETRY_LIMIT = 4
     const val OVERLAY_RETRY_DELAY_MS = 150L
 
