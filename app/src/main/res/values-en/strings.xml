@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OTP Fill</string>
+
+    <string name="accessibility_label">OTP Fill</string>
+    <string name="accessibility_description">When an OTP field is focused, temporarily watch notifications for a verification code, then fill that field only after you confirm. This service does not read the SMS inbox, does not write to the clipboard, and does not autofill without your confirmation.</string>
+
+    <string name="status_card_title">Status</string>
+    <string name="status_listener_on">Notification access: on</string>
+    <string name="status_listener_off">Notification access: off</string>
+    <string name="status_accessibility_on">Accessibility: on</string>
+    <string name="status_accessibility_off">Accessibility: off</string>
+    <string name="status_armed">Watching: on (waiting for an OTP notification)</string>
+    <string name="status_standby">Watching: standby (no OTP field detected yet)</string>
+    <string name="status_disabled">Watching: off</string>
+    <string name="status_need_permissions">Watching: not ready (permissions needed)</string>
+
+    <string name="switch_enable">Enable OTP Fill</string>
+    <string name="btn_grant_listener">Turn on notification access</string>
+    <string name="btn_grant_accessibility">Turn on accessibility</string>
+    <string name="btn_listener_granted">Notification access is on</string>
+    <string name="btn_accessibility_granted">Accessibility is on</string>
+    <string name="btn_arm_now">Start watching</string>
+    <string name="btn_disarm">Stop watching</string>
+
+    <string name="first_run_title">Grant access first</string>
+    <string name="first_run_body">OTP Fill only reads notifications while an OTP field is focused (or after you start watching manually). When a 4–8 digit code arrives, a half-screen prompt asks whether to fill it. The code is written into the field only after you tap Fill. It is never copied to the clipboard, and the SMS inbox is never read.\n\nTwo system permissions are required:\n• Notification access: while watching, read the code and a short source name from notifications\n• Accessibility: detect the OTP field, show the confirm prompt, and fill the field after you agree</string>
+    <string name="first_run_got_it">Got it</string>
+
+    <string name="rationale_listener">Notification access is used only while watching, to extract a verification code. The SMS inbox is not read, and the confirm prompt never shows the full SMS or email body.</string>
+    <string name="rationale_accessibility">Accessibility is used only to detect OTP fields, show the confirm prompt, and fill the focused field after you tap Fill.</string>
+
+    <string name="explanation">Focusing an OTP field in a webpage or app starts watching notifications. After the keyboard appears or focus is briefly lost, watching continues for about 80 seconds. Leaving the OTP page, waiting out the timeout, or turning the switch off stops it. You can also start watching manually. Incoming codes always ask for confirmation; nothing is filled silently.</string>
+    <string name="privacy_note">This app does not use the network and does not collect analytics. Turn the switch off to stop watching immediately.</string>
+
+    <string name="confirm_title">Fill in this verification code?</string>
+    <string name="confirm_source">Source: %1$s</string>
+    <string name="confirm_fill">Fill</string>
+    <string name="confirm_cancel">Cancel</string>
+    <string name="confirm_hint">This fills the current OTP field only. The code is not copied to the clipboard.</string>
+    <string name="fill_failed">Could not autofill. Please type the code yourself.</string>
+    <string name="source_notification">Notification</string>
+</resources>

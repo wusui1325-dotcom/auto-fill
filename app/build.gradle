@@ -1,0 +1,89 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def signingStoreFile = System.getenv("KEYSTORE_FILE")
+def signingStorePassword = System.getenv("KEYSTORE_PASSWORD")
+def signingKeyAlias = System.getenv("KEY_ALIAS")
+def signingKeyPassword = System.getenv("KEY_PASSWORD")
+def releaseSigningReady = signingStoreFile != null && !signingStoreFile.isEmpty() &&
+        file(signingStoreFile).exists() &&
+        signingStorePassword != null && !signingStorePassword.isEmpty() &&
+        signingKeyAlias != null && !signingKeyAlias.isEmpty() &&
+        signingKeyPassword != null && !signingKeyPassword.isEmpty()
+
+android {
+    namespace 'com.wusper.auto.fill'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.wusper.auto.fill"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "0.1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        resourceConfigurations += ["en", "zh", "zh-rCN", "zh-rTW", "zh-rHK"]
+    }
+
+    signingConfigs {
+        if (releaseSigningReady) {
+            release {
+                storeFile file(signingStoreFile)
+                storePassword signingStorePassword
+                keyAlias signingKeyAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    buildFeatures {
+        viewBinding true
+        buildConfig true
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
+    packaging {
+        resources {
+            excludes += [
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE.txt",
+                "META-INF/LICENSE",
+                "META-INF/NOTICE",
+                "META-INF/androidx/**",
+                "META-INF/*.version"
+            ]
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.activity:activity-ktx:1.9.3'
+
+    testImplementation 'junit:junit:4.13.2'
+}

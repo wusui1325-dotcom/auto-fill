@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">填码</string>
+
+    <string name="accessibility_label">填码</string>
+    <string name="accessibility_description">在验证码栏位被选中时，暂时监看通知中的验证码，并在你确认后把验证码填入该栏位。不会读取短信收件箱，不会写入剪贴板，也不会在未确认时自动填入。</string>
+
+    <string name="status_card_title">状态</string>
+    <string name="status_listener_on">通知访问：已开启</string>
+    <string name="status_listener_off">通知访问：未开启</string>
+    <string name="status_accessibility_on">无障碍：已开启</string>
+    <string name="status_accessibility_off">无障碍：未开启</string>
+    <string name="status_armed">监看：进行中（等待验证码通知）</string>
+    <string name="status_standby">监看：待机（尚未检测到验证码栏位）</string>
+    <string name="status_disabled">监看：已关闭</string>
+    <string name="status_need_permissions">监看：尚未就绪（需要权限）</string>
+
+    <string name="switch_enable">启用填码</string>
+    <string name="btn_grant_listener">开启通知访问</string>
+    <string name="btn_grant_accessibility">开启无障碍</string>
+    <string name="btn_listener_granted">通知访问已开启</string>
+    <string name="btn_accessibility_granted">无障碍已开启</string>
+    <string name="btn_arm_now">开始监看</string>
+    <string name="btn_disarm">停止监看</string>
+
+    <string name="first_run_title">使用前请先授权</string>
+    <string name="first_run_body">填码只在验证码栏位被选中时（或你手动开始监看时）暂时读取通知，抽出 4–8 位验证码后半屏询问是否填入。你点「填入」才会写入栏位，不会写入剪贴板，也不会读取短信收件箱。\n\n需要两项系统权限：\n• 通知访问：只在监看期间读取通知中的验证码与来源名称\n• 无障碍：检测验证码栏位，显示确认画面，并在你同意后填入该栏位</string>
+    <string name="first_run_got_it">知道了</string>
+
+    <string name="rationale_listener">通知访问用于在监看期间从通知抽出验证码。不会读取短信收件箱，也不会把完整短信或邮件正文显示在确认画面。</string>
+    <string name="rationale_accessibility">无障碍仅用于检测验证码栏位、显示确认画面，以及在你按下「填入」后把验证码写入该栏位。</string>
+
+    <string name="explanation">进入网页或 App 的验证码栏位时会自动开始监看通知；键盘弹出或短暂失焦后会再等约 80 秒。离开验证码页、超时或关闭开关就会停止。你也可以手动开始监看。验证码来了只会半屏询问，不会偷偷填入。</string>
+    <string name="privacy_note">本应用不联网、不收集分析数据。一键关闭上方开关即可停止监看。</string>
+
+    <string name="confirm_title">要填入这组验证码吗？</string>
+    <string name="confirm_source">来源：%1$s</string>
+    <string name="confirm_fill">填入</string>
+    <string name="confirm_cancel">取消</string>
+    <string name="confirm_hint">只会填入当前的验证码栏位，不会复制到剪贴板。</string>
+    <string name="fill_failed">无法自动填入，请手动输入</string>
+    <string name="source_notification">通知</string>
+</resources>
