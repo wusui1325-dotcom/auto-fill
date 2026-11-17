@@ -11,8 +11,8 @@ class SplitFillPolicyTest {
     fun firstCellAcceptsFullCodeWhenMaxIsAtLeastCode() {
         assertTrue(SplitFillPolicy.firstCellAcceptsFullCode(8, 8))
         assertTrue(SplitFillPolicy.firstCellAcceptsFullCode(8, 6))
+        assertTrue(SplitFillPolicy.firstCellAcceptsFullCode(null, 8))
         assertFalse(SplitFillPolicy.firstCellAcceptsFullCode(1, 8))
-        assertFalse(SplitFillPolicy.firstCellAcceptsFullCode(null, 8))
     }
 
     @Test

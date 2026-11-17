@@ -384,6 +384,7 @@ class OtpAccessibilityService : AccessibilityService() {
                     group.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
                 }
             }
+            if (tryPasteSpreadIntoFirst(target, code)) return true
             if (fillWholeField(target, code)) return true
             val retry = detectSplitGroup(target, code.length)
             if (retry != null) {
@@ -738,23 +739,12 @@ class OtpAccessibilityService : AccessibilityService() {
         val collected = mutableListOf<AccessibilityNodeInfo>()
         var handover = false
         try {
-            val parent = start.parent
-            if (parent != null) {
-                try {
-                    collectEditables(parent, collected, depth = 0, maxDepth = 2, budget = intArrayOf(48))
-                    if (collected.size < expected) {
-                        val grand = parent.parent
-                        if (grand != null) {
-                            try {
-                                collectEditables(grand, collected, depth = 0, maxDepth = 3, budget = intArrayOf(64))
-                            } finally {
-                                grand.recycleQuietly()
-                            }
-                        }
-                    }
-                } finally {
-                    parent.recycleQuietly()
-                }
+            collectEditablesFromAncestors(start, collected, expected)
+            if (collected.size < expected) {
+                collectEditablesFromWindows(start, collected)
+            }
+            if (collected.none { sameNode(it, start) }) {
+                collected += obtainCopy(start)
             }
             if (collected.size < expected) return null
             val snapshots = collected.mapIndexed { index, node -> node.toCellSnapshot(index) }
@@ -773,6 +763,67 @@ class OtpAccessibilityService : AccessibilityService() {
             if (!handover) {
                 collected.forEach { if (it !== start && it !== savedTarget) it.recycleQuietly() }
             }
+        }
+    }
+
+    private fun collectEditablesFromAncestors(
+        start: AccessibilityNodeInfo,
+        collected: MutableList<AccessibilityNodeInfo>,
+        expected: Int
+    ) {
+        var hops = 0
+        var node: AccessibilityNodeInfo? = try {
+            start.parent
+        } catch (_: Exception) {
+            null
+        }
+        while (node != null && hops < 8) {
+            val current = node
+            node = try {
+                current.parent
+            } catch (_: Exception) {
+                null
+            }
+            try {
+                collectEditables(current, collected, depth = 0, maxDepth = 5, budget = intArrayOf(96))
+            } finally {
+                current.recycleQuietly()
+            }
+            if (collected.size >= expected) return
+            hops++
+        }
+    }
+
+    private fun collectEditablesFromWindows(
+        start: AccessibilityNodeInfo,
+        collected: MutableList<AccessibilityNodeInfo>
+    ) {
+        val wantPkg = start.packageName?.toString()
+        windows?.forEach { window ->
+            if (collected.size >= 8) return@forEach
+            if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
+            if (window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) return@forEach
+            val root = try {
+                window.root
+            } catch (_: Exception) {
+                null
+            } ?: return@forEach
+            try {
+                val pkg = root.packageName?.toString()
+                if (pkg == packageName) return@forEach
+                if (wantPkg != null && pkg != wantPkg) return@forEach
+                collectEditables(root, collected, depth = 0, maxDepth = 14, budget = intArrayOf(200))
+            } finally {
+                root.recycleQuietly()
+            }
+        }
+    }
+
+    private fun refreshQuietly(node: AccessibilityNodeInfo) {
+        try {
+            node.refresh()
+        } catch (_: Exception) {
+            // Stale node.
         }
     }
 
@@ -846,24 +897,30 @@ class OtpAccessibilityService : AccessibilityService() {
      * page can spread the characters. If that leaves the whole code in cell 0,
      * clear and write one character per cell.
      */
+    private fun splitGroupState(fields: List<AccessibilityNodeInfo>, code: String): SplitGroupState {
+        fields.forEach { refreshQuietly(it) }
+        return SplitFillPolicy.groupState(fields.map { readableCompact(it) }, code)
+    }
+
+    /**
+     * Paste the full code into the first cell first, so the page's paste/input
+     * handler can spread the characters. SET_TEXT often writes the value without
+     * running that script. If the whole code stays in cell 0, clear and write
+     * one character per cell.
+     */
     private fun fillSplitGroup(fields: List<AccessibilityNodeInfo>, code: String): Boolean {
         if (fields.size != code.length) return false
         val first = fields.first()
         if (SplitFillPolicy.firstCellAcceptsFullCode(extrasMaxLengthOf(first), code.length)) {
             first.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-            val setOk = setText(first, code)
-            var state = SplitFillPolicy.groupState(fields.map { readableCompact(it) }, code)
+            clearFieldForPaste(first)
+            pasteText(first, code)
+            var state = splitGroupState(fields, code)
             if (state == SplitGroupState.DISTRIBUTED) return true
-            if (state == SplitGroupState.UNREADABLE || state == SplitGroupState.OTHER) {
-                clearFieldForPaste(first)
-                val pasteOk = pasteText(first, code)
-                state = SplitFillPolicy.groupState(fields.map { readableCompact(it) }, code)
+            if (state != SplitGroupState.DISTRIBUTED) {
+                setText(first, code)
+                state = splitGroupState(fields, code)
                 if (state == SplitGroupState.DISTRIBUTED) return true
-                if (state == SplitGroupState.UNREADABLE && pasteOk && !setOk) {
-                    // Text stays unreadable; the paste may still have spread.
-                    // Fall through to per-cell write after a clear so we do not
-                    // leave the full code only in the first box.
-                }
             }
             if (SplitFillPolicy.shouldClearFirstBeforePerCell(state) ||
                 state == SplitGroupState.FIRST_HAS_ALL
@@ -872,6 +929,34 @@ class OtpAccessibilityService : AccessibilityService() {
             }
         }
         return fillSplitFields(fields, code)
+    }
+
+    /**
+     * When sibling cells are missing from the tree, paste the full code into
+     * the first field so the page can spread it, then look for the group again.
+     */
+    private fun tryPasteSpreadIntoFirst(target: AccessibilityNodeInfo, code: String): Boolean {
+        if (!SplitFillPolicy.firstCellAcceptsFullCode(extrasMaxLengthOf(target), code.length)) {
+            return false
+        }
+        target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        clearFieldForPaste(target)
+        if (!pasteText(target, code)) return false
+        refreshQuietly(target)
+        val group = detectSplitGroup(target, code.length) ?: return false
+        return try {
+            when (splitGroupState(group, code)) {
+                SplitGroupState.DISTRIBUTED -> true
+                SplitGroupState.FIRST_HAS_ALL,
+                SplitGroupState.OTHER -> {
+                    clearFieldForPaste(group.first())
+                    fillSplitFields(group, code)
+                }
+                SplitGroupState.UNREADABLE -> fillSplitFields(group, code)
+            }
+        } finally {
+            group.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
+        }
     }
 
     private fun fillSplitFields(fields: List<AccessibilityNodeInfo>, code: String): Boolean {

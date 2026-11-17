@@ -124,4 +124,24 @@ class SplitOtpGroupDetectorTest {
         assertNull(SplitOtpGroupDetector.detect(cells, 8, startId = 0))
     }
 
+
+    @Test
+    fun detectsEightCellsWhenFirstIsWiderPasteTarget() {
+        val first = cell(0, left = 20, top = 200, width = 280, height = 56, maxLength = 8)
+        val rest = (1 until 8).map { i ->
+            cell(i, left = 20 + 280 + (i - 1) * 56, top = 200, maxLength = 1)
+        }
+        val ids = SplitOtpGroupDetector.detect(listOf(first) + rest, 8, startId = 0)
+        assertEquals((0 until 8).toList(), ids)
+    }
+
+    @Test
+    fun detectsEightCellsWhenMaxLengthIsMissing() {
+        val cells = (0 until 8).map { i ->
+            cell(i, left = 20 + i * 56, top = 200, maxLength = null)
+        }
+        val ids = SplitOtpGroupDetector.detect(cells, 8, startId = 0)
+        assertEquals((0 until 8).toList(), ids)
+    }
+
 }

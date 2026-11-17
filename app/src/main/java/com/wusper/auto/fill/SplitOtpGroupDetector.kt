@@ -30,21 +30,63 @@ object SplitOtpGroupDetector {
     fun detect(cells: List<CellSnapshot>, expected: Int, startId: Int? = null): List<Int>? {
         if (expected !in 4..8) return null
         val start = startId?.let { id -> cells.firstOrNull { it.id == id } }
+        val compactRef = cells.firstOrNull {
+            looksLikeCompactCell(it, expected) && (start == null || it.id == start.id || sameRow(it, start))
+        } ?: start
 
-        val candidates = cells.filter { looksLikeCell(it, start, expected) }
+        val candidates = cells.filter {
+            looksLikeCell(it, compactRef, expected) || isSameRowPasteFirst(it, compactRef, expected)
+        }
         if (candidates.size < expected) return null
 
-        val scoped = if (start != null && looksLikeCell(start, start, expected)) {
-            val nearby = candidates.filter { nearStart(it, start, expected) }
-            if (nearby.size >= expected) nearby else candidates.filter { similarSize(it, start) }
+        val sizeRef = compactRef ?: start
+        val scoped = if (sizeRef != null) {
+            val nearby = candidates.filter { nearStart(it, sizeRef, expected) || it.id == start?.id }
+            if (nearby.size >= expected) nearby else candidates
         } else {
             candidates
         }
         if (scoped.size < expected) return null
 
-        val cluster = pickCluster(scoped, expected, start) ?: return null
+        val cluster = pickCluster(scoped, expected, start ?: compactRef) ?: return null
         if (!isCoherentGroup(cluster, expected)) return null
         return readingOrder(cluster).map { it.id }
+    }
+
+    internal fun looksLikeCompactCell(cell: CellSnapshot, expected: Int = 8): Boolean {
+        if (!cell.isEditable && !cell.isPassword) return false
+        if (cell.textLength >= 2) return false
+        val max = cell.maxLength
+        if (max != null && max > 1) return false
+        if (cell.width <= 0 || cell.height <= 0) return false
+        if (cell.width > cell.height * 3 && cell.width > 160) return false
+        return true
+    }
+
+    private fun isSameRowPasteFirst(
+        cell: CellSnapshot,
+        reference: CellSnapshot?,
+        expected: Int
+    ): Boolean {
+        if (reference == null) return false
+        if (!cell.isEditable && !cell.isPassword) return false
+        if (cell.textLength >= 2) return false
+        val max = cell.maxLength
+        if (max != null && max > expected) return false
+        if (max != null && max in 1 until expected) return false
+        if (!sameRow(cell, reference)) return false
+        // Heights should still look like the same row of boxes.
+        if (reference.height > 0) {
+            val hOk = cell.height in (reference.height / 2)..(reference.height * 2).coerceAtLeast(reference.height + 8)
+            if (!hOk) return false
+        }
+        return true
+    }
+
+    private fun sameRow(a: CellSnapshot, b: CellSnapshot): Boolean {
+        val band = maxOf(a.height, b.height, 24) * 0.65
+        return kotlin.math.abs(a.centerY - b.centerY) <= band ||
+            verticalOverlap(a, b) >= minOf(a.height, b.height) / 2
     }
 
     /**
@@ -120,7 +162,14 @@ object SplitOtpGroupDetector {
         val typicalW = median(widths)
         val typicalH = median(heights)
         if (typicalW <= 0 || typicalH <= 0) return false
-        if (widths.any { it !in (typicalW / 2)..(typicalW * 2).coerceAtLeast(typicalW + 8) }) return false
+        val widthRange = (typicalW / 2)..(typicalW * 2).coerceAtLeast(typicalW + 8)
+        val oddWidths = cells.filter { it.width !in widthRange }
+        if (oddWidths.size > 1) return false
+        if (oddWidths.size == 1) {
+            val wide = oddWidths.first()
+            val leftmost = cells.minBy { it.left }
+            if (wide.id != leftmost.id) return false
+        }
         if (heights.any { it !in (typicalH / 2)..(typicalH * 2).coerceAtLeast(typicalH + 8) }) return false
         val rows = clusterRows(cells)
         if (rows.isEmpty()) return false

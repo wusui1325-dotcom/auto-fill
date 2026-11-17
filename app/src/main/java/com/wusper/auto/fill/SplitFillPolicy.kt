@@ -15,7 +15,8 @@ object SplitFillPolicy {
 
     fun firstCellAcceptsFullCode(maxLength: Int?, codeLength: Int): Boolean {
         if (codeLength <= 0) return false
-        return maxLength != null && maxLength >= codeLength
+        // Web often omits maxlength in the accessibility tree.
+        return maxLength == null || maxLength >= codeLength
     }
 
     fun groupState(cellTexts: List<String?>, code: String): SplitGroupState {

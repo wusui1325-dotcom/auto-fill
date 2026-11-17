@@ -1,16 +1,12 @@
 package com.wusper.auto.fill
 
 import android.content.Context
-import android.os.Build
 import android.view.LayoutInflater
-import android.view.WindowInsets
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.view.ContextThemeWrapper
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.google.android.material.color.DynamicColors
 import com.wusper.auto.fill.databinding.ViewConfirmBinding
 
@@ -88,7 +84,6 @@ class ConfirmOverlayWindow {
             windowManager = wm
             attachedKind = kind
             root = view
-            applyImePadding(view)
             forceVisible()
             true
         } catch (_: Exception) {
@@ -146,50 +141,6 @@ class ConfirmOverlayWindow {
         val created = ViewConfirmBinding.inflate(LayoutInflater.from(themed))
         binding = created
         root = created.root as FrameLayout
-        applyImePadding(created.root as FrameLayout)
         return created
-    }
-
-    private fun applyImePadding(view: FrameLayout) {
-        ViewCompat.setOnApplyWindowInsetsListener(view) { _, insets ->
-            padCard(insets.getInsets(WindowInsetsCompat.Type.ime()).bottom,
-                insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom)
-            insets
-        }
-        view.setOnApplyWindowInsetsListener { v, insets ->
-            val ime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                insets.getInsets(WindowInsets.Type.ime()).bottom
-            } else {
-                0
-            }
-            val nav = insets.systemWindowInsetBottom
-            padCard(ime, nav)
-            v.onApplyWindowInsets(insets)
-        }
-        ViewCompat.requestApplyInsets(view)
-        view.post {
-            val compat = ViewCompat.getRootWindowInsets(view)
-            val platform = view.rootWindowInsets
-            val ime = compat?.getInsets(WindowInsetsCompat.Type.ime())?.bottom
-                ?: if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && platform != null) {
-                    platform.getInsets(WindowInsets.Type.ime()).bottom
-                } else {
-                    0
-                }
-            val nav = compat?.getInsets(WindowInsetsCompat.Type.systemBars())?.bottom
-                ?: platform?.systemWindowInsetBottom
-                ?: 0
-            padCard(ime, nav)
-        }
-    }
-
-    private fun padCard(imeBottom: Int, barBottom: Int) {
-        val card = binding?.confirmCard ?: return
-        val bottom = maxOf(imeBottom, barBottom)
-        val lp = card.layoutParams as? FrameLayout.LayoutParams ?: return
-        if (lp.bottomMargin != bottom) {
-            lp.bottomMargin = bottom
-            card.layoutParams = lp
-        }
     }
 }
