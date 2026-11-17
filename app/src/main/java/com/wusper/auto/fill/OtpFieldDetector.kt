@@ -14,7 +14,8 @@ data class FieldSnapshot(
     val isEditable: Boolean = true,
     val isPassword: Boolean = false,
     val isFocused: Boolean = false,
-    val maxLength: Int? = null
+    val maxLength: Int? = null,
+    val labelText: String? = null
 )
 
 object OtpFieldDetector {
@@ -85,10 +86,16 @@ object OtpFieldDetector {
         }
     }
 
+    fun looksLikeOtpText(text: String?): Boolean {
+        if (text.isNullOrBlank()) return false
+        return KEYWORD_RE.containsMatchIn(text) || DIGIT_COUNT_RE.containsMatchIn(text)
+    }
+
     private fun joinBlob(field: FieldSnapshot): String {
         return buildString {
             field.hint?.let { append(it).append(' ') }
             field.contentDescription?.let { append(it).append(' ') }
+            field.labelText?.let { append(it).append(' ') }
             field.viewId?.let { append(it).append(' ') }
             // Current text is a weak signal and can be a half-typed value; only use short text.
             val text = field.text

@@ -48,19 +48,24 @@ object FillWritePolicy {
 
     /**
      * After ACTION_SET_TEXT was attempted with a single copy of [code].
-     * If the action returned true and the field text is unreadable (common
-     * in WebView), treat it as success and do not paste or type.
+     * An unreadable field plus a true return value is not enough: some
+     * browsers report success without writing the value. Only stop when
+     * the code is visible or [confirmedNearby] (seen in the node tree).
+     * Otherwise clear and paste so the write is not skipped, without
+     * appending a second copy when SET_TEXT actually did work.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun afterSetText(
         setTextReturned: Boolean,
         visibleText: String?,
-        code: String
+        code: String,
+        confirmedNearby: Boolean = false
     ): FillWriteAction {
         return when (visibleState(visibleText, code)) {
             VisibleCodeState.EXACT -> FillWriteAction.STOP_SUCCESS
             VisibleCodeState.DOUBLED -> FillWriteAction.WRITE_SINGLE
             VisibleCodeState.UNREADABLE ->
-                if (setTextReturned) FillWriteAction.STOP_SUCCESS
+                if (confirmedNearby) FillWriteAction.STOP_SUCCESS
                 else FillWriteAction.FALLBACK_PASTE
             VisibleCodeState.OTHER -> FillWriteAction.FALLBACK_PASTE
         }
@@ -88,8 +93,9 @@ object FillWritePolicy {
     fun afterSetTextCell(
         setTextReturned: Boolean,
         visibleText: String?,
-        ch: String
+        ch: String,
+        confirmedNearby: Boolean = false
     ): FillWriteAction {
-        return afterSetText(setTextReturned, visibleText, ch)
+        return afterSetText(setTextReturned, visibleText, ch, confirmedNearby)
     }
 }

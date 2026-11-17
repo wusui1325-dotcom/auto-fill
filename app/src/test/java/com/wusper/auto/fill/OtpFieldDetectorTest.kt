@@ -71,4 +71,12 @@ class OtpFieldDetectorTest {
             )
         )
     }
+
+    @Test
+    fun detectsLabelText() {
+        assertTrue(OtpFieldDetector.isOtpField(FieldSnapshot(labelText = "驗證碼（6 位數字）")))
+        assertTrue(OtpFieldDetector.isOtpField(FieldSnapshot(labelText = "Verification code")))
+        assertTrue(OtpFieldDetector.looksLikeOtpText("八格驗證碼"))
+        assertFalse(OtpFieldDetector.looksLikeOtpText("電子郵件"))
+    }
 }

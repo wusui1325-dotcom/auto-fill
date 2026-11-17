@@ -32,18 +32,30 @@ class FillWritePolicyTest {
     }
 
     @Test
-    fun setTextTrueButUnreadableStopsAndDoesNotPaste() {
+    fun setTextUnreadableWithoutConfirmationFallsBackToPaste() {
         assertEquals(
-            FillWriteAction.STOP_SUCCESS,
+            FillWriteAction.FALLBACK_PASTE,
             FillWritePolicy.afterSetText(true, "", "123456")
         )
         assertEquals(
-            FillWriteAction.STOP_SUCCESS,
+            FillWriteAction.FALLBACK_PASTE,
             FillWritePolicy.afterSetText(true, null, "123456")
         )
         assertEquals(
-            FillWriteAction.STOP_SUCCESS,
+            FillWriteAction.FALLBACK_PASTE,
             FillWritePolicy.afterSetText(true, "  ", "123456")
+        )
+    }
+
+    @Test
+    fun setTextUnreadableButConfirmedNearbyStopsAndDoesNotPaste() {
+        assertEquals(
+            FillWriteAction.STOP_SUCCESS,
+            FillWritePolicy.afterSetText(true, "", "123456", confirmedNearby = true)
+        )
+        assertEquals(
+            FillWriteAction.STOP_SUCCESS,
+            FillWritePolicy.afterSetText(false, null, "123456", confirmedNearby = true)
         )
     }
 
@@ -97,8 +109,12 @@ class FillWritePolicyTest {
         assertFalse(FillWritePolicy.cellAlreadyHas("", "1"))
         assertFalse(FillWritePolicy.cellAlreadyHas("2", "1"))
         assertEquals(
-            FillWriteAction.STOP_SUCCESS,
+            FillWriteAction.FALLBACK_PASTE,
             FillWritePolicy.afterSetTextCell(true, "", "1")
+        )
+        assertEquals(
+            FillWriteAction.STOP_SUCCESS,
+            FillWritePolicy.afterSetTextCell(true, "", "1", confirmedNearby = true)
         )
         assertEquals(
             FillWriteAction.FALLBACK_PASTE,

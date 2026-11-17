@@ -250,8 +250,25 @@ class OtpAccessibilityService : AccessibilityService() {
             isEditable = isEditable,
             isPassword = isPassword,
             isFocused = isFocused,
-            maxLength = extrasMaxLength()
+            maxLength = extrasMaxLength(),
+            labelText = readLabeledText()
         )
+    }
+
+    private fun AccessibilityNodeInfo.readLabeledText(): String? {
+        val label = try {
+            labeledBy
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        return try {
+            listOf(label.text?.toString(), label.contentDescription?.toString(), label.hintText?.toString())
+                .mapNotNull { it?.trim()?.takeIf { s -> s.isNotEmpty() } }
+                .joinToString(" ")
+                .ifBlank { null }
+        } finally {
+            label.recycleQuietly()
+        }
     }
 
     private fun AccessibilityNodeInfo.readAutofillHints(): List<String> {
@@ -384,7 +401,10 @@ class OtpAccessibilityService : AccessibilityService() {
             else -> { }
         }
         val setOk = setText(target, code)
-        when (FillWritePolicy.afterSetText(setOk, readableCompact(target), code)) {
+        val afterText = readableCompact(target)
+        val confirmed = FillWritePolicy.visibleState(afterText, code) == VisibleCodeState.EXACT ||
+            codePresentInNodeOrNearby(target, code)
+        when (FillWritePolicy.afterSetText(setOk, afterText, code, confirmed)) {
             FillWriteAction.STOP_SUCCESS -> return true
             FillWriteAction.WRITE_SINGLE -> {
                 setText(target, code)
@@ -467,7 +487,12 @@ class OtpAccessibilityService : AccessibilityService() {
             acc.append(ch)
             val soFar = acc.toString()
             val setOk = setText(node, soFar)
-            when (FillWritePolicy.afterSetText(setOk, readableCompact(node), soFar)) {
+            val typedVisible = readableCompact(node)
+            val typedConfirmed = soFar.length >= 4 && (
+                FillWritePolicy.visibleState(typedVisible, soFar) == VisibleCodeState.EXACT ||
+                    codePresentInNodeOrNearby(node, soFar)
+                )
+            when (FillWritePolicy.afterSetText(setOk, typedVisible, soFar, typedConfirmed)) {
                 FillWriteAction.STOP_SUCCESS -> continue
                 FillWriteAction.WRITE_SINGLE -> {
                     setText(node, soFar)
@@ -648,10 +673,45 @@ class OtpAccessibilityService : AccessibilityService() {
         return null
     }
 
+    /**
+     * Chrome and other browsers often keep the visible "驗證碼" label on a
+     * sibling or parent, not on the input's own hint or labeled-by field.
+     */
+    private fun isNearbyLabeledOtp(node: AccessibilityNodeInfo): Boolean {
+        if (!node.isEditable && !node.isPassword) return false
+        if (isAddressBar(node)) return false
+        val parent = try {
+            node.parent
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        return try {
+            val blobs = StringBuilder()
+            parent.text?.let { blobs.append(it).append(' ') }
+            parent.contentDescription?.let { blobs.append(it).append(' ') }
+            parent.hintText?.let { blobs.append(it).append(' ') }
+            val limit = minOf(parent.childCount, 12)
+            for (i in 0 until limit) {
+                val child = parent.getChild(i) ?: continue
+                try {
+                    if (child.isEditable || child.isPassword) continue
+                    child.text?.let { blobs.append(it).append(' ') }
+                    child.contentDescription?.let { blobs.append(it).append(' ') }
+                    child.hintText?.let { blobs.append(it).append(' ') }
+                } finally {
+                    child.recycleQuietly()
+                }
+            }
+            OtpFieldDetector.looksLikeOtpText(blobs.toString())
+        } finally {
+            parent.recycleQuietly()
+        }
+    }
+
     private fun findOtpDescendant(node: AccessibilityNodeInfo, budget: Int): Pair<AccessibilityNodeInfo?, Int> {
         var remaining = budget - 1
         if (remaining < 0) return null to 0
-        if (isOtpNode(node)) return obtainCopy(node) to remaining
+        if (isOtpNode(node) || isNearbyLabeledOtp(node)) return obtainCopy(node) to remaining
         for (i in 0 until node.childCount) {
             if (remaining <= 0) break
             val child = node.getChild(i) ?: continue
@@ -874,8 +934,8 @@ class OtpAccessibilityService : AccessibilityService() {
         private const val IME_CACHE_MS = 60_000L
         private const val TREE_BUDGET = 80
         private const val FILL_TREE_BUDGET = 200
-        private const val FILL_RETRY_MS = 40L
-        private const val FILL_FIELD_RETRIES = 4
+        private const val FILL_RETRY_MS = 60L
+        private const val FILL_FIELD_RETRIES = 10
 
         // Platform stubs on some SDKs omit getAutofillHints(); call it reflectively when present.
         private val GET_AUTOFILL_HINTS = try {
