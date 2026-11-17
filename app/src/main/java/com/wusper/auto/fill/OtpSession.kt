@@ -137,6 +137,21 @@ object OtpSession {
         return true
     }
 
+    /**
+     * Offer a code from the in-app authenticator. Does not require the
+     * notification watcher to be armed; the user still confirms before fill.
+     */
+    fun offerManualFill(otp: PendingOtp, now: Long = System.currentTimeMillis()): Boolean {
+        if (otp.code.isBlank()) return false
+        synchronized(lock) {
+            pending = otp
+        }
+        main.removeCallbacks(expirePending)
+        main.postDelayed(expirePending, PROMPT_TIMEOUT_MS)
+        notifyChanged()
+        return true
+    }
+
     fun confirmFill(): Boolean {
         val current = synchronized(lock) {
             val value = pending

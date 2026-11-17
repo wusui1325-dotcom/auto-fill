@@ -1,5 +1,6 @@
 package com.wusper.auto.fill
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.appcompat.app.AppCompatActivity
@@ -42,6 +43,9 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnListener.setOnClickListener { Permissions.openNotificationListenerSettings(this) }
         binding.btnAccessibility.setOnClickListener { Permissions.openAccessibilitySettings(this) }
+        binding.btnTotp.setOnClickListener {
+            startActivity(Intent(this, TotpActivity::class.java))
+        }
         binding.btnArm.setOnClickListener {
             if (OtpSession.isArmed()) {
                 OtpSession.stopWatching()

@@ -42,4 +42,50 @@
     <string name="confirm_hint">只会填入当前的验证码栏位，不会复制到剪贴板。</string>
     <string name="fill_failed">无法自动填入，请手动输入</string>
     <string name="source_notification">通知</string>
+
+    <string name="btn_totp">验证器</string>
+    <string name="btn_totp_hint">内置 6 位一次性密码，密钥只加密存放在本应用，可导入与导出。</string>
+
+    <string name="totp_title">验证器</string>
+    <string name="totp_intro">账户与密钥只加密存放在这台设备上，不会上传，也不会与其他应用联动。长按验证码可复制当前显示的一组数字，密钥不会被复制。</string>
+    <string name="totp_empty">还没有验证器账户。点「新增」粘贴 otpauth 链接或输入密钥。</string>
+    <string name="totp_add">新增</string>
+    <string name="totp_add_title">新增账户</string>
+    <string name="totp_add_intro">可粘贴 otpauth://totp 链接，或手动输入发行方、账户名称与 Base32 密钥。默认为 6 位数、SHA1、每 30 秒更新。</string>
+    <string name="totp_import">导入</string>
+    <string name="totp_export">导出</string>
+    <string name="totp_delete">删除</string>
+    <string name="totp_delete_title">删除这个账户？</string>
+    <string name="totp_delete_body">将从本应用移除“%1$s”。此操作无法撤销。</string>
+    <string name="totp_fill">填入</string>
+    <string name="totp_remaining">剩余 %1$d 秒</string>
+    <string name="totp_copied">已复制当前验证码</string>
+    <string name="totp_vault_error">无法打开加密存储区</string>
+    <string name="totp_generate_failed">无法生成验证码</string>
+    <string name="totp_need_accessibility">请先开启无障碍，才能把验证码填入栏位</string>
+    <string name="totp_offer_failed">目前无法提出填入请求</string>
+    <string name="totp_confirm_hint">请在半屏确认后才会填入栏位</string>
+    <string name="totp_export_password_title">导出备份</string>
+    <string name="totp_export_password_body">可设置密码来加密备份文件。若留空，文件会以明文 JSON 保存密钥，请自行妥善保管。</string>
+    <string name="totp_export_encrypted_ok">已导出加密备份</string>
+    <string name="totp_export_plain_ok">已导出备份。文件含密钥，请妥善保管。</string>
+    <string name="totp_export_failed">导出失败</string>
+    <string name="totp_import_password_title">输入备份密码</string>
+    <string name="totp_import_password_body">这个备份已加密，请输入导出时设置的密码。</string>
+    <string name="totp_import_failed">导入失败。请确认文件格式或密码。</string>
+    <string name="totp_import_empty">文件里没有可导入的账户</string>
+    <string name="totp_import_ok">已导入 %1$d 个新账户（文件共 %2$d 个）</string>
+    <string name="totp_password_hint">密码（可留空）</string>
+    <string name="totp_field_uri">otpauth 链接（可选）</string>
+    <string name="totp_field_issuer">发行方</string>
+    <string name="totp_field_label">账户名称</string>
+    <string name="totp_field_secret">密钥（Base32）</string>
+    <string name="totp_save">保存</string>
+    <string name="totp_saved">已保存账户</string>
+    <string name="totp_save_failed">无法保存，请检查输入内容</string>
+    <string name="totp_secret_invalid">密钥不是有效的 Base32，或长度不足</string>
+    <string name="totp_name_required">请输入发行方或账户名称</string>
+    <string name="totp_preview_invalid">输入有效密钥后，这里会显示当前验证码</string>
+    <string name="totp_preview_ok">当前验证码：%1$s（剩余 %2$d 秒）</string>
 </resources>
+

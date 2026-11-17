@@ -1,6 +1,8 @@
 package com.wusper.auto.fill
 
 import android.accessibilityservice.AccessibilityService
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -393,12 +395,8 @@ class OtpAccessibilityService : AccessibilityService() {
                     group.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
                 }
             }
-            if (!target.isEditable && !target.isPassword && !target.isFocused) return false
-            target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-            if (setText(target, code) && textContainsCode(target, code)) {
-                return true
-            }
-            // setText may report success but keep only one character; try a sibling group again.
+            if (fillWholeField(target, code)) return true
+            // Whole-field SET_TEXT may keep only one character; do not treat that as success.
             val retry = detectSplitGroup(target, code.length)
             if (retry != null) {
                 try {
@@ -407,10 +405,18 @@ class OtpAccessibilityService : AccessibilityService() {
                     retry.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
                 }
             }
-            return textContainsCode(target, code)
+            return codeFullyPresent(target, code)
         } finally {
             if (target !== savedTarget) target.recycleQuietly()
         }
+    }
+
+    private fun fillWholeField(target: AccessibilityNodeInfo, code: String): Boolean {
+        if (!target.isEditable && !target.isPassword && !target.isFocused) return false
+        target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        setText(target, code)
+        target.refresh()
+        return codeFullyPresent(target, code)
     }
 
     private fun setText(node: AccessibilityNodeInfo, value: String): Boolean {
@@ -419,11 +425,13 @@ class OtpAccessibilityService : AccessibilityService() {
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     }
 
-    private fun textContainsCode(node: AccessibilityNodeInfo, code: String): Boolean {
+    private fun codeFullyPresent(node: AccessibilityNodeInfo, code: String): Boolean {
         node.refresh()
         val text = node.text?.toString()?.filter { it.isLetterOrDigit() }.orEmpty()
         val compact = code.filter { it.isLetterOrDigit() }
-        return compact.isNotEmpty() && text.contains(compact, ignoreCase = true)
+        if (compact.isEmpty()) return false
+        if (compact.length > 1 && text.length <= 1) return false
+        return text.contains(compact, ignoreCase = true) && text.length >= compact.length
     }
 
     private fun resolveTarget(): AccessibilityNodeInfo? {
@@ -497,61 +505,160 @@ class OtpAccessibilityService : AccessibilityService() {
      * Detect a row of 4–8 single-character OTP boxes. Only used when the group
      * clearly looks like one-box-per-digit; otherwise we leave filling to SET_TEXT.
      */
+    /**
+     * Detect 4–8 single-character OTP cells, including wrapped rows and slight
+     * vertical offset. Collects from the parent and a limited grandparent walk;
+     * does not click-guess unrelated boxes.
+     */
     private fun detectSplitGroup(start: AccessibilityNodeInfo, expected: Int): List<AccessibilityNodeInfo>? {
         if (expected !in 4..8) return null
-        val parent = start.parent ?: return null
-        val fields = mutableListOf<AccessibilityNodeInfo>()
+        val collected = mutableListOf<AccessibilityNodeInfo>()
         var handover = false
         try {
-            for (i in 0 until parent.childCount) {
-                val child = parent.getChild(i) ?: continue
-                if (child.isEditable || child.isPassword) {
-                    fields.add(child)
-                } else {
-                    child.recycleQuietly()
+            val parent = start.parent
+            if (parent != null) {
+                try {
+                    collectEditables(parent, collected, depth = 0, maxDepth = 2, budget = intArrayOf(48))
+                    if (collected.size < expected) {
+                        val grand = parent.parent
+                        if (grand != null) {
+                            try {
+                                collectEditables(grand, collected, depth = 0, maxDepth = 3, budget = intArrayOf(64))
+                            } finally {
+                                grand.recycleQuietly()
+                            }
+                        }
+                    }
+                } finally {
+                    parent.recycleQuietly()
                 }
             }
-            if (fields.size != expected) return null
-            val bounds = Array(fields.size) { Rect() }
-            for (i in fields.indices) fields[i].getBoundsInScreen(bounds[i])
-            val ordered = fields.indices.sortedWith(
-                compareBy({ bounds[it].top / 24 }, { bounds[it].left })
-            ).map { fields[it] }
-            val orderedBounds = ordered.map { val r = Rect(); it.getBoundsInScreen(r); r }
-            val widths = orderedBounds.map { it.width() }
-            val typical = widths.sorted()[widths.size / 2]
-            if (typical <= 0) return null
-            val similar = widths.all { it in (typical / 2)..(typical * 2).coerceAtLeast(typical + 8) }
-            if (!similar) return null
-            val sameRow = orderedBounds.maxOf { it.top } - orderedBounds.minOf { it.top } <= 24
-            if (!sameRow) return null
-            val singleChar = ordered.all { node ->
-                val max = node.extrasMaxLength()
-                val textLen = node.text?.length ?: 0
-                (max != null && max <= 1) || textLen <= 1
-            }
-            if (!singleChar) return null
+            if (collected.size < expected) return null
+            val snapshots = collected.mapIndexed { index, node -> node.toCellSnapshot(index) }
+            val startId = collected.indexOfFirst { sameNode(it, start) }.takeIf { it >= 0 }
+            val ids = SplitOtpGroupDetector.detect(snapshots, expected, startId) ?: return null
+            val selected = ids.map { collected[it] }
             handover = true
-            return ordered
+            // Recycle nodes that were not selected.
+            collected.forEach { node ->
+                if (node !in selected && node !== start && node !== savedTarget) {
+                    node.recycleQuietly()
+                }
+            }
+            return selected
         } finally {
             if (!handover) {
-                fields.forEach { it.recycleQuietly() }
+                collected.forEach { if (it !== start && it !== savedTarget) it.recycleQuietly() }
             }
-            parent.recycleQuietly()
         }
+    }
+
+    private fun collectEditables(
+        node: AccessibilityNodeInfo,
+        out: MutableList<AccessibilityNodeInfo>,
+        depth: Int,
+        maxDepth: Int,
+        budget: IntArray
+    ) {
+        if (budget[0] <= 0) return
+        budget[0]--
+        if (node.isEditable || node.isPassword) {
+            if (out.none { sameNode(it, node) }) {
+                out += obtainCopy(node)
+            }
+        }
+        if (depth >= maxDepth) return
+        for (i in 0 until node.childCount) {
+            if (budget[0] <= 0) return
+            val child = node.getChild(i) ?: continue
+            try {
+                collectEditables(child, out, depth + 1, maxDepth, budget)
+            } finally {
+                child.recycleQuietly()
+            }
+        }
+    }
+
+    private fun sameNode(a: AccessibilityNodeInfo, b: AccessibilityNodeInfo): Boolean {
+        if (a === b) return true
+        val idA = a.viewIdResourceName
+        val idB = b.viewIdResourceName
+        if (!idA.isNullOrBlank() && idA == idB) {
+            val ra = Rect()
+            val rb = Rect()
+            a.getBoundsInScreen(ra)
+            b.getBoundsInScreen(rb)
+            return ra == rb
+        }
+        val ra = Rect()
+        val rb = Rect()
+        a.getBoundsInScreen(ra)
+        b.getBoundsInScreen(rb)
+        return ra == rb && a.className == b.className
+    }
+
+    private fun AccessibilityNodeInfo.toCellSnapshot(id: Int): CellSnapshot {
+        val bounds = Rect()
+        getBoundsInScreen(bounds)
+        return CellSnapshot(
+            id = id,
+            left = bounds.left,
+            top = bounds.top,
+            right = bounds.right,
+            bottom = bounds.bottom,
+            maxLength = extrasMaxLength(),
+            textLength = text?.length ?: 0,
+            isEditable = isEditable,
+            isPassword = isPassword,
+            className = className?.toString(),
+            hint = hintText?.toString(),
+            viewId = viewIdResourceName,
+            autofillHints = readAutofillHints()
+        )
     }
 
     private fun fillSplitFields(fields: List<AccessibilityNodeInfo>, code: String): Boolean {
         if (fields.size != code.length) return false
-        var all = true
         for (i in fields.indices) {
-            fields[i].performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-            if (!setText(fields[i], code[i].toString())) {
-                all = false
-                break
+            val node = fields[i]
+            val ch = code[i].toString()
+            node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            if (setText(node, ch) && cellHasChar(node, ch)) continue
+            if (pasteOneChar(node, ch) && cellHasChar(node, ch)) continue
+            return false
+        }
+        return true
+    }
+
+    private fun cellHasChar(node: AccessibilityNodeInfo, ch: String): Boolean {
+        node.refresh()
+        val text = node.text?.toString()?.filter { it.isLetterOrDigit() }.orEmpty()
+        val want = ch.filter { it.isLetterOrDigit() }
+        return want.isNotEmpty() && text.equals(want, ignoreCase = true)
+    }
+
+    private fun pasteOneChar(node: AccessibilityNodeInfo, ch: String): Boolean {
+        val cm = getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager ?: return false
+        val previous = try {
+            cm.primaryClip
+        } catch (_: Exception) {
+            null
+        }
+        val hadClip = previous != null
+        return try {
+            cm.setPrimaryClip(ClipData.newPlainText("", ch))
+            node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        } finally {
+            try {
+                when {
+                    hadClip && previous != null -> cm.setPrimaryClip(previous)
+                    android.os.Build.VERSION.SDK_INT >= 28 -> cm.clearPrimaryClip()
+                    else -> cm.setPrimaryClip(ClipData.newPlainText("", ""))
+                }
+            } catch (_: Exception) {
+                // Best-effort restore; the pasted character was a single code cell.
             }
         }
-        return all
     }
 
     private fun pendingKey(pending: PendingOtp): String {

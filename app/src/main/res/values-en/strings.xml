@@ -42,4 +42,50 @@
     <string name="confirm_hint">This fills the current OTP field only. The code is not copied to the clipboard.</string>
     <string name="fill_failed">Could not autofill. Please type the code yourself.</string>
     <string name="source_notification">Notification</string>
+
+    <string name="btn_totp">Authenticator</string>
+    <string name="btn_totp_hint">Built-in 6-digit one-time codes. Secrets stay encrypted in this app and can be imported or exported.</string>
+
+    <string name="totp_title">Authenticator</string>
+    <string name="totp_intro">Accounts and secrets are encrypted on this device only. They are not uploaded and are not linked to another app. Long-press a code to copy the digits currently on screen; the secret is never copied.</string>
+    <string name="totp_empty">No authenticator accounts yet. Tap Add to paste an otpauth URI or enter a secret.</string>
+    <string name="totp_add">Add</string>
+    <string name="totp_add_title">Add account</string>
+    <string name="totp_add_intro">Paste an otpauth://totp URI, or enter the issuer, account name, and Base32 secret. The default is 6 digits, SHA1, refreshing every 30 seconds.</string>
+    <string name="totp_import">Import</string>
+    <string name="totp_export">Export</string>
+    <string name="totp_delete">Delete</string>
+    <string name="totp_delete_title">Delete this account?</string>
+    <string name="totp_delete_body">“%1$s” will be removed from this app. This cannot be undone.</string>
+    <string name="totp_fill">Fill</string>
+    <string name="totp_remaining">%1$d seconds left</string>
+    <string name="totp_copied">Current code copied</string>
+    <string name="totp_vault_error">Could not open the encrypted store</string>
+    <string name="totp_generate_failed">Could not generate a code</string>
+    <string name="totp_need_accessibility">Turn on Accessibility first so the code can be filled into a field</string>
+    <string name="totp_offer_failed">Could not start the fill prompt</string>
+    <string name="totp_confirm_hint">The code is filled only after you confirm on the half-screen prompt</string>
+    <string name="totp_export_password_title">Export backup</string>
+    <string name="totp_export_password_body">Optionally set a password to encrypt the backup file. If you leave it blank, secrets are stored as plain JSON — keep the file safe.</string>
+    <string name="totp_export_encrypted_ok">Encrypted backup exported</string>
+    <string name="totp_export_plain_ok">Backup exported. The file contains secrets; keep it safe.</string>
+    <string name="totp_export_failed">Export failed</string>
+    <string name="totp_import_password_title">Enter backup password</string>
+    <string name="totp_import_password_body">This backup is encrypted. Enter the password you set when exporting.</string>
+    <string name="totp_import_failed">Import failed. Check the file format or password.</string>
+    <string name="totp_import_empty">No accounts could be imported from this file</string>
+    <string name="totp_import_ok">Imported %1$d new account(s) (%2$d in the file)</string>
+    <string name="totp_password_hint">Password (optional)</string>
+    <string name="totp_field_uri">otpauth URI (optional)</string>
+    <string name="totp_field_issuer">Issuer</string>
+    <string name="totp_field_label">Account name</string>
+    <string name="totp_field_secret">Secret (Base32)</string>
+    <string name="totp_save">Save</string>
+    <string name="totp_saved">Account saved</string>
+    <string name="totp_save_failed">Could not save. Check the details you entered.</string>
+    <string name="totp_secret_invalid">The secret is not valid Base32, or it is too short</string>
+    <string name="totp_name_required">Enter an issuer or account name</string>
+    <string name="totp_preview_invalid">A live code will appear here once the secret is valid</string>
+    <string name="totp_preview_ok">Current code: %1$s (%2$d seconds left)</string>
 </resources>
+
