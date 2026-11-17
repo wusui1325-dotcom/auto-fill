@@ -3,8 +3,11 @@ package com.wusper.auto.fill
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.WindowManager
@@ -24,12 +27,21 @@ import com.wusper.auto.fill.databinding.ViewConfirmBinding
  */
 class OtpAccessibilityService : AccessibilityService() {
 
+    private val handler = Handler(Looper.getMainLooper())
     private var unobserve: (() -> Unit)? = null
     private var overlay: FrameLayout? = null
+    private var overlayBinding: ViewConfirmBinding? = null
     private var shownKey: String? = null
     private var savedTarget: AccessibilityNodeInfo? = null
     private var lastFocusedWasOtp = false
     private var lastAppPackage: String? = null
+    private var pendingWindowPkg: String? = null
+    private var imePackages: Set<String> = emptySet()
+    private var imePackagesAt = 0L
+
+    private val debounceWindows = Runnable {
+        handleWindowEvent(pendingWindowPkg, AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -47,15 +59,19 @@ class OtpAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        if (!OtpSession.arming.masterEnabled) return
         val eventPkg = event.packageName?.toString()
-        if (ArmingPolicy.isTransientPackage(eventPkg, packageName)) {
-            return
-        }
+        if (isIgnoredPackage(eventPkg)) return
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_FOCUSED,
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> handleFocusEvent(event)
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
-            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> handleWindowEvent(eventPkg, event.eventType)
+            AccessibilityEvent.TYPE_VIEW_FOCUSED -> handleFocusEvent(event, treatAsUnfocus = true)
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> handleFocusEvent(event, treatAsUnfocus = false)
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ->
+                handleWindowEvent(eventPkg, event.eventType)
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED -> {
+                pendingWindowPkg = eventPkg ?: pendingWindowPkg
+                handler.removeCallbacks(debounceWindows)
+                handler.postDelayed(debounceWindows, WINDOW_DEBOUNCE_MS)
+            }
         }
     }
 
@@ -64,7 +80,9 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        handler.removeCallbacksAndMessages(null)
         hideOverlay()
+        overlayBinding = null
         OtpSession.fillHandler = null
         unobserve?.invoke()
         unobserve = null
@@ -74,24 +92,31 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         hideOverlay()
+        overlayBinding = null
         recycleTarget()
         super.onDestroy()
     }
 
-    private fun handleFocusEvent(event: AccessibilityEvent) {
+    private fun handleFocusEvent(event: AccessibilityEvent, treatAsUnfocus: Boolean) {
         val source = event.source
         try {
-            val node = source ?: focusedEditable()
-            val otp = node != null && isOtpNode(node)
-            if (otp && node != null) {
-                rememberTarget(node)
-                lastFocusedWasOtp = true
-                lastAppPackage = node.packageName?.toString() ?: event.packageName?.toString()
-                OtpSession.otpFocusGained()
-            } else if (lastFocusedWasOtp) {
-                lastFocusedWasOtp = false
-                OtpSession.otpFocusLost()
+            val node = source ?: if (treatAsUnfocus) focusedEditable() else null
+            val ownedFallback = node != null && node !== source
+            try {
+                val otp = node != null && isOtpNode(node)
+                if (otp && node != null) {
+                    rememberTarget(node)
+                    lastFocusedWasOtp = true
+                    lastAppPackage = node.packageName?.toString() ?: event.packageName?.toString()
+                    OtpSession.otpFocusGained()
+                } else if (treatAsUnfocus && lastFocusedWasOtp) {
+                    lastFocusedWasOtp = false
+                    OtpSession.otpFocusLost()
+                }
+            } finally {
+                if (ownedFallback) node?.recycleQuietly()
             }
         } finally {
             source?.recycleQuietly()
@@ -112,10 +137,9 @@ class OtpAccessibilityService : AccessibilityService() {
             focused?.recycleQuietly()
         }
 
-        if (!OtpSession.arming.masterEnabled) return
         if (!OtpSession.isArmed() && !lastFocusedWasOtp) return
 
-        if (eventPkg != null && (ArmingPolicy.isTransientPackage(eventPkg, packageName) || isImePackage(eventPkg))) {
+        if (eventPkg != null && isIgnoredPackage(eventPkg)) {
             if (lastFocusedWasOtp) {
                 lastFocusedWasOtp = false
                 OtpSession.otpFocusLost()
@@ -146,11 +170,20 @@ class OtpAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun isIgnoredPackage(pkg: String?): Boolean {
+        return ArmingPolicy.isTransientPackage(pkg, packageName) || isImePackage(pkg)
+    }
+
     private fun isImePackage(pkg: String?): Boolean {
         if (pkg.isNullOrBlank()) return false
         if (ArmingPolicy.isTransientPackage(pkg, packageName)) return true
-        val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager ?: return false
-        return imm.inputMethodList.any { it.packageName == pkg }
+        val now = System.currentTimeMillis()
+        if (now - imePackagesAt > IME_CACHE_MS) {
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as? InputMethodManager
+            imePackages = imm?.inputMethodList?.mapNotNull { it.packageName }?.toSet().orEmpty()
+            imePackagesAt = now
+        }
+        return pkg in imePackages
     }
 
     private fun focusedEditable(): AccessibilityNodeInfo? {
@@ -164,10 +197,15 @@ class OtpAccessibilityService : AccessibilityService() {
             } ?: return@forEach
             try {
                 val focus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-                if (focus != null && focus.isEditable) {
-                    return focus
+                if (focus != null) {
+                    try {
+                        if (focus.isEditable || focus.isPassword || isOtpNode(focus)) {
+                            return obtainCopy(focus)
+                        }
+                    } finally {
+                        focus.recycleQuietly()
+                    }
                 }
-                focus?.recycleQuietly()
             } finally {
                 root.recycleQuietly()
             }
@@ -179,8 +217,15 @@ class OtpAccessibilityService : AccessibilityService() {
         } ?: return null
         try {
             val focus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-            if (focus != null && focus.isEditable) return focus
-            focus?.recycleQuietly()
+            if (focus != null) {
+                try {
+                    if (focus.isEditable || focus.isPassword || isOtpNode(focus)) {
+                        return obtainCopy(focus)
+                    }
+                } finally {
+                    focus.recycleQuietly()
+                }
+            }
         } finally {
             root.recycleQuietly()
         }
@@ -188,7 +233,6 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     private fun isOtpNode(node: AccessibilityNodeInfo): Boolean {
-        if (!node.isEditable && !node.isPassword) return false
         return OtpFieldDetector.isOtpField(node.toSnapshot())
     }
 
@@ -203,10 +247,10 @@ class OtpAccessibilityService : AccessibilityService() {
             className = className?.toString(),
             isEditable = isEditable,
             isPassword = isPassword,
+            isFocused = isFocused,
             maxLength = extrasMaxLength()
         )
     }
-
 
     private fun AccessibilityNodeInfo.readAutofillHints(): List<String> {
         val fromMethod = try {
@@ -223,7 +267,6 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     private fun AccessibilityNodeInfo.extrasMaxLength(): Int? {
-
         val extras = extras ?: return null
         val keys = arrayOf("maxLength", "android.view.View.maxLength", "androidx.core.view.maxLength")
         for (key in keys) {
@@ -237,7 +280,7 @@ class OtpAccessibilityService : AccessibilityService() {
 
     private fun rememberTarget(node: AccessibilityNodeInfo) {
         recycleTarget()
-        savedTarget = AccessibilityNodeInfo.obtain(node)
+        savedTarget = obtainCopy(node)
     }
 
     private fun recycleTarget() {
@@ -247,11 +290,7 @@ class OtpAccessibilityService : AccessibilityService() {
 
     private fun showPrompt(pending: PendingOtp) {
         if (overlay != null && shownKey == pendingKey(pending)) return
-        hideOverlay()
-        val themed = DynamicColors.wrapContextIfAvailable(
-            ContextThemeWrapper(this, R.style.Theme_AutoFill)
-        )
-        val binding = ViewConfirmBinding.inflate(LayoutInflater.from(themed))
+        val binding = overlayBinding ?: inflateOverlay()
         binding.confirmCode.text = pending.code
         binding.confirmSource.text = getString(R.string.confirm_source, pending.source)
         binding.btnFill.setOnClickListener { accept(pending) }
@@ -259,25 +298,41 @@ class OtpAccessibilityService : AccessibilityService() {
         binding.confirmRoot.setOnClickListener { cancel() }
         binding.confirmCard.setOnClickListener { /* swallow */ }
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        )
-        params.gravity = Gravity.BOTTOM
-        params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
         val root = binding.root as FrameLayout
-        try {
-            addOverlay(root, params)
-            overlay = root
-            shownKey = pendingKey(pending)
-        } catch (_: Exception) {
-            overlay = null
-            shownKey = null
-            startConfirmActivity()
+        if (overlay !== root || root.parent == null) {
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT
+            )
+            params.gravity = Gravity.BOTTOM
+            params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+            try {
+                if (root.parent != null) {
+                    (getSystemService(WINDOW_SERVICE) as WindowManager).removeViewImmediate(root)
+                }
+                addOverlay(root, params)
+                overlay = root
+            } catch (_: Exception) {
+                overlay = null
+                shownKey = null
+                startConfirmActivity()
+                return
+            }
         }
+        shownKey = pendingKey(pending)
+        root.visibility = android.view.View.VISIBLE
+    }
+
+    private fun inflateOverlay(): ViewConfirmBinding {
+        val themed = DynamicColors.wrapContextIfAvailable(
+            ContextThemeWrapper(this, R.style.Theme_AutoFill)
+        )
+        val binding = ViewConfirmBinding.inflate(LayoutInflater.from(themed))
+        overlayBinding = binding
+        return binding
     }
 
     private fun addOverlay(view: FrameLayout, params: WindowManager.LayoutParams) {
@@ -286,12 +341,9 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     private fun hideOverlay() {
-        val view = overlay ?: run {
-            shownKey = null
-            return
-        }
-        overlay = null
         shownKey = null
+        val view = overlay ?: return
+        overlay = null
         try {
             val wm = getSystemService(WINDOW_SERVICE) as WindowManager
             wm.removeViewImmediate(view)
@@ -310,17 +362,18 @@ class OtpAccessibilityService : AccessibilityService() {
         try {
             startActivity(intent)
         } catch (_: Exception) {
-            // Fail open: the user can type the code themselves.
+            // Fail open: timeout will clear the pending prompt; the user can type the code.
         }
     }
 
     private fun accept(pending: PendingOtp) {
-        hideOverlay()
-        if (OtpSession.pending?.code == pending.code) {
-            val ok = OtpSession.confirmFill()
-            if (!ok) {
-                Toast.makeText(this, R.string.fill_failed, Toast.LENGTH_SHORT).show()
-            }
+        if (OtpSession.pending?.code != pending.code) {
+            hideOverlay()
+            return
+        }
+        val ok = OtpSession.confirmFill()
+        if (!ok) {
+            Toast.makeText(this, R.string.fill_failed, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -332,28 +385,52 @@ class OtpAccessibilityService : AccessibilityService() {
     private fun fillCode(code: String): Boolean {
         val target = resolveTarget() ?: return false
         try {
-            if (!target.isEditable && !target.isPassword) return false
+            val group = detectSplitGroup(target, code.length)
+            if (group != null) {
+                try {
+                    return fillSplitFields(group, code)
+                } finally {
+                    group.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
+                }
+            }
+            if (!target.isEditable && !target.isPassword && !target.isFocused) return false
             target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-            val args = Bundle()
-            args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, code)
-            if (target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
+            if (setText(target, code) && textContainsCode(target, code)) {
                 return true
             }
-            // Best-effort: fill sequential single-character sibling fields.
-            return fillSplitFields(target, code)
-        } finally {
-            // Keep savedTarget; resolveTarget may have returned a fresh copy.
-            if (target !== savedTarget) {
-                target.recycleQuietly()
+            // setText may report success but keep only one character; try a sibling group again.
+            val retry = detectSplitGroup(target, code.length)
+            if (retry != null) {
+                try {
+                    return fillSplitFields(retry, code)
+                } finally {
+                    retry.forEach { if (it !== target && it !== savedTarget) it.recycleQuietly() }
+                }
             }
+            return textContainsCode(target, code)
+        } finally {
+            if (target !== savedTarget) target.recycleQuietly()
         }
+    }
+
+    private fun setText(node: AccessibilityNodeInfo, value: String): Boolean {
+        val args = Bundle()
+        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, value)
+        return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    private fun textContainsCode(node: AccessibilityNodeInfo, code: String): Boolean {
+        node.refresh()
+        val text = node.text?.toString()?.filter { it.isLetterOrDigit() }.orEmpty()
+        val compact = code.filter { it.isLetterOrDigit() }
+        return compact.isNotEmpty() && text.contains(compact, ignoreCase = true)
     }
 
     private fun resolveTarget(): AccessibilityNodeInfo? {
         val saved = savedTarget
         if (saved != null) {
             try {
-                if (saved.refresh() && (saved.isEditable || saved.isPassword)) {
+                if (saved.refresh() && (saved.isEditable || saved.isPassword || isOtpNode(saved))) {
                     return saved
                 }
             } catch (_: Exception) {
@@ -372,7 +449,9 @@ class OtpAccessibilityService : AccessibilityService() {
 
     private fun findOtpInWindows(): AccessibilityNodeInfo? {
         val wantPkg = lastAppPackage
+        var budget = TREE_BUDGET
         windows?.forEach { window ->
+            if (budget <= 0) return@forEach
             if (window.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY) return@forEach
             val root = try {
                 window.root
@@ -381,10 +460,12 @@ class OtpAccessibilityService : AccessibilityService() {
             } ?: return@forEach
             try {
                 if (wantPkg != null && root.packageName?.toString() != wantPkg) return@forEach
-                val match = findOtpDescendant(root)
-                if (match != null) {
-                    rememberTarget(match)
-                    match.recycleQuietly()
+                val match = findOtpDescendant(root, budget)
+                budget = match.second
+                val node = match.first
+                if (node != null) {
+                    rememberTarget(node)
+                    node.recycleQuietly()
                     return savedTarget
                 }
             } finally {
@@ -394,62 +475,98 @@ class OtpAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun findOtpDescendant(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        if (isOtpNode(node)) return AccessibilityNodeInfo.obtain(node)
+    private fun findOtpDescendant(node: AccessibilityNodeInfo, budget: Int): Pair<AccessibilityNodeInfo?, Int> {
+        var remaining = budget - 1
+        if (remaining < 0) return null to 0
+        if (isOtpNode(node)) return obtainCopy(node) to remaining
         for (i in 0 until node.childCount) {
+            if (remaining <= 0) break
             val child = node.getChild(i) ?: continue
             val found = try {
-                findOtpDescendant(child)
+                findOtpDescendant(child, remaining)
             } finally {
                 child.recycleQuietly()
             }
-            if (found != null) return found
+            remaining = found.second
+            if (found.first != null) return found
         }
-        return null
+        return null to remaining
     }
 
-    private fun fillSplitFields(start: AccessibilityNodeInfo, code: String): Boolean {
-        val parent = start.parent ?: return false
+    /**
+     * Detect a row of 4–8 single-character OTP boxes. Only used when the group
+     * clearly looks like one-box-per-digit; otherwise we leave filling to SET_TEXT.
+     */
+    private fun detectSplitGroup(start: AccessibilityNodeInfo, expected: Int): List<AccessibilityNodeInfo>? {
+        if (expected !in 4..8) return null
+        val parent = start.parent ?: return null
+        val fields = mutableListOf<AccessibilityNodeInfo>()
+        var handover = false
         try {
-            val fields = mutableListOf<AccessibilityNodeInfo>()
-            try {
-                for (i in 0 until parent.childCount) {
-                    val child = parent.getChild(i) ?: continue
-                    if (child.isEditable) {
-                        fields.add(child)
-                    } else {
-                        child.recycleQuietly()
-                    }
+            for (i in 0 until parent.childCount) {
+                val child = parent.getChild(i) ?: continue
+                if (child.isEditable || child.isPassword) {
+                    fields.add(child)
+                } else {
+                    child.recycleQuietly()
                 }
-                if (fields.size !in 4..8 || fields.size != code.length) return false
-                var all = true
-                for (i in fields.indices) {
-                    val args = Bundle()
-                    args.putCharSequence(
-                        AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,
-                        code[i].toString()
-                    )
-                    if (!fields[i].performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
-                        all = false
-                        break
-                    }
-                }
-                return all
-            } finally {
+            }
+            if (fields.size != expected) return null
+            val bounds = Array(fields.size) { Rect() }
+            for (i in fields.indices) fields[i].getBoundsInScreen(bounds[i])
+            val ordered = fields.indices.sortedWith(
+                compareBy({ bounds[it].top / 24 }, { bounds[it].left })
+            ).map { fields[it] }
+            val orderedBounds = ordered.map { val r = Rect(); it.getBoundsInScreen(r); r }
+            val widths = orderedBounds.map { it.width() }
+            val typical = widths.sorted()[widths.size / 2]
+            if (typical <= 0) return null
+            val similar = widths.all { it in (typical / 2)..(typical * 2).coerceAtLeast(typical + 8) }
+            if (!similar) return null
+            val sameRow = orderedBounds.maxOf { it.top } - orderedBounds.minOf { it.top } <= 24
+            if (!sameRow) return null
+            val singleChar = ordered.all { node ->
+                val max = node.extrasMaxLength()
+                val textLen = node.text?.length ?: 0
+                (max != null && max <= 1) || textLen <= 1
+            }
+            if (!singleChar) return null
+            handover = true
+            return ordered
+        } finally {
+            if (!handover) {
                 fields.forEach { it.recycleQuietly() }
             }
-        } finally {
             parent.recycleQuietly()
         }
+    }
+
+    private fun fillSplitFields(fields: List<AccessibilityNodeInfo>, code: String): Boolean {
+        if (fields.size != code.length) return false
+        var all = true
+        for (i in fields.indices) {
+            fields[i].performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            if (!setText(fields[i], code[i].toString())) {
+                all = false
+                break
+            }
+        }
+        return all
     }
 
     private fun pendingKey(pending: PendingOtp): String {
         return "${pending.packageName}|${pending.notificationKey}|${pending.code}"
     }
 
+    private fun obtainCopy(node: AccessibilityNodeInfo): AccessibilityNodeInfo {
+        @Suppress("DEPRECATION")
+        return AccessibilityNodeInfo.obtain(node)
+    }
+
     private fun AccessibilityNodeInfo.recycleQuietly() {
         if (Build.VERSION.SDK_INT >= 33) return
         try {
+            @Suppress("DEPRECATION")
             recycle()
         } catch (_: Exception) {
             // Already recycled.
@@ -457,6 +574,10 @@ class OtpAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        private const val WINDOW_DEBOUNCE_MS = 120L
+        private const val IME_CACHE_MS = 60_000L
+        private const val TREE_BUDGET = 80
+
         // Platform stubs on some SDKs omit getAutofillHints(); call it reflectively when present.
         private val GET_AUTOFILL_HINTS = try {
             AccessibilityNodeInfo::class.java.getMethod("getAutofillHints")

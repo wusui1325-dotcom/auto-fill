@@ -51,7 +51,9 @@ class MainActivity : AppCompatActivity() {
             render(OtpSession.snapshot())
         }
 
-        unobserve = OtpSession.observe { snap -> render(snap) }
+        unobserve = OtpSession.observe { snap ->
+            if (!isDestroyed && !isFinishing) render(snap)
+        }
     }
 
     override fun onResume() {
@@ -66,15 +68,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun render(snap: SessionSnapshot) {
+        if (!::binding.isInitialized || isDestroyed) return
         val listenerOn = Permissions.isNotificationListenerEnabled(this)
         val a11yOn = Permissions.isAccessibilityEnabled(this)
         val ready = listenerOn && a11yOn
 
         binding.statusListener.text = getString(
-            if (listenerOn) R.string.status_listener_on else R.string.status_listener_off
+            when {
+                listenerOn && snap.listenerConnected -> R.string.status_listener_on
+                listenerOn -> R.string.status_listener_enabled_disconnected
+                else -> R.string.status_listener_off
+            }
         )
         binding.statusAccessibility.text = getString(
-            if (a11yOn) R.string.status_accessibility_on else R.string.status_accessibility_off
+            when {
+                a11yOn && snap.accessibilityConnected -> R.string.status_accessibility_on
+                a11yOn -> R.string.status_accessibility_enabled_disconnected
+                else -> R.string.status_accessibility_off
+            }
         )
         binding.statusWatch.text = when {
             !snap.masterEnabled -> getString(R.string.status_disabled)

@@ -4,7 +4,7 @@
 
 顯示名稱：填碼  
 applicationId：`com.wusper.auto.fill`  
-介面預設繁體中文，另有简体中文與 English。Material 3 / Material You 動態色彩。
+介面預設繁體中文，另有简体中文與 English。Material 3 / Material You 動態色彩。目前發行版本：0.1.1。
 
 ## 行為
 
@@ -43,3 +43,5 @@ KEY_PASSWORD
 ## License
 
 MIT
+
+目前發行版本：0.1.1。

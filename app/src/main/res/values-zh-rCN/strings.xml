@@ -8,8 +8,10 @@
     <string name="status_card_title">状态</string>
     <string name="status_listener_on">通知访问：已开启</string>
     <string name="status_listener_off">通知访问：未开启</string>
+    <string name="status_listener_enabled_disconnected">通知访问：已开启，但服务尚未连线</string>
     <string name="status_accessibility_on">无障碍：已开启</string>
     <string name="status_accessibility_off">无障碍：未开启</string>
+    <string name="status_accessibility_enabled_disconnected">无障碍：已开启，但服务尚未连线</string>
     <string name="status_armed">监看：进行中（等待验证码通知）</string>
     <string name="status_standby">监看：待机（尚未检测到验证码栏位）</string>
     <string name="status_disabled">监看：已关闭</string>

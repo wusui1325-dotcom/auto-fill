@@ -3,6 +3,7 @@ package com.wusper.auto.fill
 import android.os.Handler
 import android.os.Looper
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.math.max
 
 data class PendingOtp(
     val code: String,
@@ -25,9 +26,15 @@ data class SessionSnapshot(
  * Does not persist notification bodies or write codes to the clipboard.
  */
 object OtpSession {
+    const val PROMPT_TIMEOUT_MS = 60_000L
+
     private val main = Handler(Looper.getMainLooper())
     private val listeners = CopyOnWriteArrayList<(SessionSnapshot) -> Unit>()
     private val recentKeys = ArrayDeque<Pair<String, Long>>()
+    private val lock = Any()
+
+    @Volatile
+    private var lastSnapshot: SessionSnapshot? = null
 
     @Volatile
     var arming: ArmingPolicy.State = ArmingPolicy.State()
@@ -47,6 +54,9 @@ object OtpSession {
 
     @Volatile
     var fillHandler: ((PendingOtp) -> Boolean)? = null
+
+    private val expireArming = Runnable { notifyChanged() }
+    private val expirePending = Runnable { cancelConfirm() }
 
     fun snapshot(now: Long = System.currentTimeMillis()): SessionSnapshot {
         return SessionSnapshot(
@@ -68,25 +78,23 @@ object OtpSession {
 
     fun setMasterEnabled(enabled: Boolean) {
         update { ArmingPolicy.onMaster(enabled, it) }
-        if (!enabled) {
-            pending = null
-        }
+        if (!enabled) clearPendingLocked()
         notifyChanged()
     }
 
     fun otpFocusGained() {
-        update { ArmingPolicy.onOtpFocusGained(it) }
-        notifyChanged()
+        val changed = update { ArmingPolicy.onOtpFocusGained(it) }
+        if (changed) notifyChanged()
     }
 
     fun otpFocusLost(now: Long = System.currentTimeMillis()) {
-        update { ArmingPolicy.onOtpFocusLost(it, now) }
-        notifyChanged()
+        val changed = update { ArmingPolicy.onOtpFocusLost(it, now) }
+        if (changed) notifyChanged()
     }
 
     fun leftPage() {
-        update { ArmingPolicy.onLeftPage(it) }
-        notifyChanged()
+        val changed = update { ArmingPolicy.onLeftPage(it) }
+        if (changed) notifyChanged()
     }
 
     fun manualArm(now: Long = System.currentTimeMillis()) {
@@ -96,20 +104,20 @@ object OtpSession {
 
     fun stopWatching() {
         update { ArmingPolicy.onStopWatching(it) }
-        pending = null
+        clearPendingLocked()
         notifyChanged()
     }
 
     fun setListenerConnected(connected: Boolean) {
+        if (listenerConnected == connected) return
         listenerConnected = connected
         notifyChanged()
     }
 
     fun setAccessibilityConnected(connected: Boolean) {
+        if (accessibilityConnected == connected && (connected || pending == null)) return
         accessibilityConnected = connected
-        if (!connected) {
-            pending = null
-        }
+        if (!connected) clearPendingLocked()
         notifyChanged()
     }
 
@@ -117,29 +125,62 @@ object OtpSession {
         if (!arming.isArmed(now)) return false
         if (otp.code.isBlank()) return false
         val dedupKey = "${otp.packageName}|${otp.notificationKey}|${otp.code}"
-        pruneRecent(now)
-        if (recentKeys.any { it.first == dedupKey }) return false
-        recentKeys.addLast(dedupKey to now)
-        pending = otp
+        synchronized(lock) {
+            pruneRecent(now)
+            if (recentKeys.any { it.first == dedupKey }) return false
+            recentKeys.addLast(dedupKey to now)
+            pending = otp
+        }
+        main.removeCallbacks(expirePending)
+        main.postDelayed(expirePending, PROMPT_TIMEOUT_MS)
         notifyChanged()
         return true
     }
 
     fun confirmFill(): Boolean {
-        val current = pending ?: return false
-        pending = null
+        val current = synchronized(lock) {
+            val value = pending
+            pending = null
+            value
+        } ?: return false
+        main.removeCallbacks(expirePending)
         notifyChanged()
         return fillHandler?.invoke(current) == true
     }
 
     fun cancelConfirm() {
-        pending = null
-        notifyChanged()
+        val had = synchronized(lock) {
+            val value = pending
+            pending = null
+            value
+        } != null
+        main.removeCallbacks(expirePending)
+        if (had) notifyChanged()
     }
 
-    private fun update(block: (ArmingPolicy.State) -> ArmingPolicy.State) {
-        synchronized(this) {
-            arming = block(arming)
+    private fun clearPendingLocked() {
+        synchronized(lock) { pending = null }
+        main.removeCallbacks(expirePending)
+    }
+
+    private fun update(block: (ArmingPolicy.State) -> ArmingPolicy.State): Boolean {
+        val next: ArmingPolicy.State
+        val changed: Boolean
+        synchronized(lock) {
+            next = block(arming)
+            changed = next != arming
+            arming = next
+        }
+        scheduleArmExpiry(next)
+        return changed
+    }
+
+    private fun scheduleArmExpiry(state: ArmingPolicy.State) {
+        main.removeCallbacks(expireArming)
+        val now = System.currentTimeMillis()
+        val until = max(state.graceUntil, state.manualUntil)
+        if (state.masterEnabled && !state.otpFieldFocused && until > now) {
+            main.postDelayed(expireArming, until - now + 15L)
         }
     }
 
@@ -155,6 +196,8 @@ object OtpSession {
 
     private fun notifyChanged() {
         val snap = snapshot()
+        if (snap == lastSnapshot) return
+        lastSnapshot = snap
         val deliver = Runnable {
             listeners.forEach { it(snap) }
         }

@@ -1,6 +1,7 @@
 package com.wusper.auto.fill
 
 import android.text.InputType
+
 /** Pure snapshot so OTP-field heuristics can be unit tested without AccessibilityNodeInfo. */
 data class FieldSnapshot(
     val autofillHints: List<String> = emptyList(),
@@ -12,6 +13,7 @@ data class FieldSnapshot(
     val className: String? = null,
     val isEditable: Boolean = true,
     val isPassword: Boolean = false,
+    val isFocused: Boolean = false,
     val maxLength: Int? = null
 )
 
@@ -45,25 +47,30 @@ object OtpFieldDetector {
     )
 
     fun isOtpField(field: FieldSnapshot): Boolean {
+        val strong = hasStrongSignal(field)
+        val canFill = field.isEditable || field.isPassword || field.isFocused
+        if (strong && canFill) return true
         if (!field.isEditable) return false
-        if (hasAutofillOtpHint(field.autofillHints)) return true
-
-        val blob = listOf(field.hint, field.text, field.contentDescription, field.viewId)
-            .filterNotNull()
-            .joinToString(" ")
-        if (blob.isNotBlank() && KEYWORD_RE.containsMatchIn(blob)) return true
-        if (blob.isNotBlank() && DIGIT_COUNT_RE.containsMatchIn(blob)) return true
-        if (!field.viewId.isNullOrBlank() && VIEW_ID_RE.containsMatchIn(field.viewId)) return true
 
         val number = isNumberClass(field.inputType)
         val phone = isPhoneClass(field.inputType)
-        if (phone && !KEYWORD_RE.containsMatchIn(blob)) return false
+        if (phone) return false
 
         val max = field.maxLength
         if (max != null && number) {
             if (max in 5..8) return true
             if (max == 4 && (field.isPassword || isNumberPassword(field.inputType))) return true
         }
+        return false
+    }
+
+    fun hasStrongSignal(field: FieldSnapshot): Boolean {
+        if (hasAutofillOtpHint(field.autofillHints)) return true
+        val blob = joinBlob(field)
+        if (blob.isEmpty()) return false
+        if (KEYWORD_RE.containsMatchIn(blob)) return true
+        if (DIGIT_COUNT_RE.containsMatchIn(blob)) return true
+        if (!field.viewId.isNullOrBlank() && VIEW_ID_RE.containsMatchIn(field.viewId)) return true
         return false
     }
 
@@ -78,14 +85,23 @@ object OtpFieldDetector {
         }
     }
 
+    private fun joinBlob(field: FieldSnapshot): String {
+        return buildString {
+            field.hint?.let { append(it).append(' ') }
+            field.contentDescription?.let { append(it).append(' ') }
+            field.viewId?.let { append(it).append(' ') }
+            // Current text is a weak signal and can be a half-typed value; only use short text.
+            val text = field.text
+            if (!text.isNullOrBlank() && text.length <= 24) append(text)
+        }
+    }
+
     private fun isNumberClass(inputType: Int): Boolean {
-        val cls = inputType and InputType.TYPE_MASK_CLASS
-        return cls == InputType.TYPE_CLASS_NUMBER
+        return (inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_NUMBER
     }
 
     private fun isPhoneClass(inputType: Int): Boolean {
-        val cls = inputType and InputType.TYPE_MASK_CLASS
-        return cls == InputType.TYPE_CLASS_PHONE
+        return (inputType and InputType.TYPE_MASK_CLASS) == InputType.TYPE_CLASS_PHONE
     }
 
     private fun isNumberPassword(inputType: Int): Boolean {

@@ -8,8 +8,10 @@
     <string name="status_card_title">Status</string>
     <string name="status_listener_on">Notification access: on</string>
     <string name="status_listener_off">Notification access: off</string>
+    <string name="status_listener_enabled_disconnected">Notification access: on, but the service is not connected</string>
     <string name="status_accessibility_on">Accessibility: on</string>
     <string name="status_accessibility_off">Accessibility: off</string>
+    <string name="status_accessibility_enabled_disconnected">Accessibility: on, but the service is not connected</string>
     <string name="status_armed">Watching: on (waiting for an OTP notification)</string>
     <string name="status_standby">Watching: standby (no OTP field detected yet)</string>
     <string name="status_disabled">Watching: off</string>
